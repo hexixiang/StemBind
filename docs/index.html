@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description"
+        content="StemBind: a shared-stem diagnostic benchmark that probes perception, rule induction, and rule-to-instance binding in abstract visual reasoning for MLLMs.">
+  <meta name="keywords" content="StemBind, abstract visual reasoning, MLLM, benchmark, rule-to-instance binding">
+  <title>StemBind: When MLLMs Get Lost Between Rules and Instances</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Noto+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+
+  <style>
+    body { font-family: "Noto Sans", system-ui, sans-serif; color: #1f2430; }
+    .hero-title { font-family: "Google Sans", "Noto Sans", sans-serif; font-weight: 700; line-height: 1.18; }
+    .section { padding: 2.2rem 1.5rem; }
+    .authors a { color: #2456a6; }
+    .author-block { margin: 0 0.35rem; white-space: nowrap; }
+    .affil { color: #4a5568; font-size: 0.95rem; }
+    .link-buttons .button { margin: 0.25rem; border-radius: 999px; }
+    .hook { background: #0f1f3d; color: #fff; border-radius: 12px; padding: 1.4rem 1.6rem; }
+    .hook em { color: #ffd479; font-style: normal; font-weight: 600; }
+    .stat { text-align: center; }
+    .stat .num { font-family: "Google Sans", sans-serif; font-size: 2.0rem; font-weight: 700; color: #2456a6; line-height: 1; }
+    .stat .lab { color: #4a5568; font-size: 0.9rem; margin-top: 0.3rem; }
+    .finding-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.1rem 1.3rem; height: 100%; background: #fff; }
+    .finding-card .tag { background: #2456a6; color: #fff; }
+    figure img { border-radius: 8px; }
+    .caption { color: #4a5568; font-size: 0.9rem; margin-top: 0.5rem; }
+    pre.bibtex { background: #0f1f3d; color: #e6edf3; border-radius: 10px; padding: 1.1rem; overflow-x: auto; font-size: 0.85rem; }
+    .note { background: #fff8e1; border-left: 4px solid #f1c40f; padding: 0.7rem 1rem; border-radius: 6px; font-size: 0.9rem; }
+    .section-title { font-family: "Google Sans", sans-serif; font-weight: 700; }
+  </style>
+</head>
+
+<body>
+
+<!-- ===================== HERO / TITLE ===================== -->
+<section class="section" style="padding-top:3rem;">
+  <div class="container is-max-desktop has-text-centered">
+    <h1 class="title is-2 hero-title">
+      <span style="color:#2456a6;">StemBind</span>: When MLLMs Get Lost Between Rules and Instances in Abstract Visual Reasoning
+    </h1>
+
+    <p class="authors is-size-5" style="margin-top:1rem;">
+      <span class="author-block">Xixiang He<sup>1</sup>,</span>
+      <span class="author-block">Baiqi Wu<sup>2</sup>,</span>
+      <span class="author-block">Xingming Li<sup>1</sup>,</span>
+      <span class="author-block">Ao Cheng<sup>1</sup>,</span>
+      <span class="author-block">Qiyao Sun<sup>1</sup>,</span>
+      <span class="author-block">Xuanyu Ji<sup>1</sup>,</span>
+      <span class="author-block">Qingyong Hu<sup>3</sup>&#42;</span>
+    </p>
+
+    <p class="affil" style="margin-top:0.6rem;">
+      <sup>1</sup>National University of Defense Technology &nbsp;&nbsp;
+      <sup>2</sup>Zhejiang University &nbsp;&nbsp;
+      <sup>3</sup>Intelligent Game and Decision Lab
+    </p>
+    <p class="affil"><sup>&#42;</sup>Corresponding author</p>
+
+    <div class="link-buttons" style="margin-top:1.4rem;">
+      <!-- TODO: replace XXXX.XXXXX with the real arXiv id once announced -->
+      <a class="button is-dark" href="https://arxiv.org/abs/XXXX.XXXXX" target="_blank" rel="noopener">
+        <span class="icon"><i class="ai ai-arxiv"></i></span><span>arXiv</span>
+      </a>
+      <a class="button is-dark" href="https://github.com/hexixiang/StemBind" target="_blank" rel="noopener">
+        <span class="icon"><i class="fab fa-github"></i></span><span>Code</span>
+      </a>
+      <a class="button is-dark" href="https://huggingface.co/datasets/user48271/Stembind" target="_blank" rel="noopener">
+        <span class="icon">&#129303;</span><span>Dataset</span>
+      </a>
+      <a class="button is-dark" href="#leaderboard">
+        <span class="icon"><i class="fas fa-trophy"></i></span><span>Leaderboard</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== TEASER ===================== -->
+<section class="section" style="padding-top:0.5rem;">
+  <div class="container is-max-desktop has-text-centered">
+    <figure>
+      <img src="static/images/teaser.png" alt="StemBind overview: nine RI/VP operations, shared-stem P/R/F probes, and S1-S4 process stages.">
+      <p class="caption">
+        StemBind probes the <strong>same visual stem</strong> three ways &mdash; <strong>P</strong>erception (what is in the image),
+        <strong>R</strong>ule (what pattern governs it), and <strong>F</strong>ull (which option completes it) &mdash;
+        and annotates each full item with four reasoning stages: <strong>S1 Encode, S2 Infer, S3 Map, S4 Apply</strong>.
+      </p>
+    </figure>
+  </div>
+</section>
+
+<!-- ===================== HOOK ===================== -->
+<section class="section" style="padding-top:0.5rem;">
+  <div class="container is-max-desktop">
+    <div class="hook has-text-centered is-size-5">
+      MLLMs often <em>know the rule but pick the wrong answer</em>: a model can describe what it sees and name the
+      underlying pattern, yet still fail to choose the matching candidate. StemBind is built to catch exactly this failure
+      on the same visual evidence.
+    </div>
+  </div>
+</section>
+
+<!-- ===================== ABSTRACT ===================== -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 section-title has-text-centered">Abstract</h2>
+    <div class="content is-size-5" style="text-align:justify;">
+      <p>
+        Existing abstract visual reasoning (AVR) benchmarks collapse perception, rule induction, and answer selection into
+        a single right-or-wrong signal, so they cannot tell <em>why</em> a model failed. We introduce <strong>StemBind</strong>,
+        a shared-stem diagnostic benchmark that probes the same visual stem with three aligned questions &mdash;
+        Perception, Rule, and Full &mdash; so a final-answer error can be attributed to a specific sub-step on the same evidence.
+        StemBind contains <strong>2,298</strong> curated knowledge-light stems across nine auditable visual operations,
+        totaling <strong>19,533</strong> P/R/F tasks, with each full item annotated by Sternberg's four reasoning stages
+        (S1 Encode, S2 Infer, S3 Map, S4 Apply).
+      </p>
+      <p>
+        Evaluating <strong>24 frontier MLLM configurations</strong> yields four findings: (i) rule accuracy exceeds full-item
+        accuracy on 22 of 24 models, so most failures happen <em>after</em> the rule is identified; (ii) even when perception
+        and rule are both correct on the same stem, models still answer Full incorrectly 51.2% of the time; (iii) process
+        diagnostics and Stage-wise Stimulus Augmentation localize the dominant failure to <strong>S3 rule-to-instance mapping</strong>;
+        and (iv) neither scaling up model size nor enabling explicit thinking reliably closes the gap. StemBind reframes AVR
+        evaluation from final-answer ranking to locating <em>where</em> abstract visual reasoning breaks down.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== AT A GLANCE ===================== -->
+<section class="section" style="background:#f5f7fb;">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 section-title has-text-centered">Benchmark at a Glance</h2>
+    <div class="columns is-multiline" style="margin-top:0.5rem;">
+      <div class="column is-one-fifth stat"><div class="num">2,298</div><div class="lab">curated stems</div></div>
+      <div class="column is-one-fifth stat"><div class="num">19,533</div><div class="lab">P/R/F tasks</div></div>
+      <div class="column is-one-fifth stat"><div class="num">9</div><div class="lab">visual operations</div></div>
+      <div class="column is-one-fifth stat"><div class="num">S1&ndash;S4</div><div class="lab">process stages</div></div>
+      <div class="column is-one-fifth stat"><div class="num">24</div><div class="lab">MLLM configs</div></div>
+    </div>
+    <p class="has-text-centered affil" style="margin-top:0.5rem;">
+      Task split: 14,937 Perception &middot; 2,298 Rule &middot; 2,298 Full. Operations span the Rule-Induction family
+      (RI-Pos, RI-Sty, RI-Attr, RI-Qty, RI-Rel) and the Visual-Processing family (VP-Fold, VP-View, VP-Rot, VP-Closure).
+    </p>
+  </div>
+</section>
+
+<!-- ===================== FINDINGS ===================== -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 section-title has-text-centered">Key Findings</h2>
+
+    <div class="columns is-vcentered" style="margin-top:0.5rem;">
+      <div class="column is-half">
+        <div class="finding-card">
+          <span class="tag is-medium">Finding 1</span>
+          <h3 class="title is-5" style="margin-top:0.6rem;">The R&ndash;F chasm and a persistent binding gap</h3>
+          <p>Rule accuracy exceeds full-item accuracy on <strong>22 of 24</strong> models, often by 20&ndash;34 points. Even on
+          the strict subset where perception and rule are both correct on the same stem, models still miss the full item
+          <strong>51.2%</strong> of the time. The failure is behavioral rule-to-instance binding, not a missing rule.</p>
+        </div>
+      </div>
+      <div class="column is-half has-text-centered">
+        <figure><img src="static/images/rf_chasm.png" alt="R-F chasm across 24 models"></figure>
+      </div>
+    </div>
+
+    <div class="columns is-vcentered">
+      <div class="column is-half has-text-centered">
+        <figure><img src="static/images/stage_ssa.png" alt="Qwen3.5 S1-S4 and SSA localization"></figure>
+      </div>
+      <div class="column is-half">
+        <div class="finding-card">
+          <span class="tag is-medium">Finding 2</span>
+          <h3 class="title is-5" style="margin-top:0.6rem;">The bottleneck is S3 Map</h3>
+          <p>Stage-wise judging and Stage-wise Stimulus Augmentation (SSA) both point to <strong>S3 rule-to-instance mapping</strong>:
+          S3 is the weakest stage on every full-split row, and the largest SSA gain appears precisely when S3 alignment is
+          injected. This is a behavioral localization, not a mechanistic claim.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="columns is-vcentered">
+      <div class="column is-half">
+        <div class="finding-card">
+          <span class="tag is-medium">Finding 3</span>
+          <h3 class="title is-5" style="margin-top:0.6rem;">Scaling does not close the gap</h3>
+          <p>Within-family scaling shifts perception and rule far more than full-item accuracy. Qwen3.5 dense peaks pre-MoE
+          and the largest MoE variant collapses on rule, while Gemma&nbsp;4 and InternVL3.5 improve on Full yet keep the
+          R&ndash;F chasm.</p>
+        </div>
+      </div>
+      <div class="column is-half has-text-centered">
+        <figure><img src="static/images/family_scaling.png" alt="Family scaling across Qwen3.5, Gemma 4, InternVL3.5"></figure>
+      </div>
+    </div>
+
+    <div class="columns is-vcentered">
+      <div class="column is-half has-text-centered">
+        <figure><img src="static/images/thinking_paired.png" alt="Paired direct vs thinking modes"></figure>
+      </div>
+      <div class="column is-half">
+        <div class="finding-card">
+          <span class="tag is-medium">Finding 4</span>
+          <h3 class="title is-5" style="margin-top:0.6rem;">Thinking does not repair the gap</h3>
+          <p>Across paired direct/thinking rows, explicit thinking lifts perception on nine of ten rows but <strong>lowers
+          both rule and full-item accuracy on every row</strong>. Longer traces aid local descriptions but break the
+          slot-level correspondence the full item requires.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== LEADERBOARD ===================== -->
+<section class="section" id="leaderboard" style="background:#f5f7fb;">
+  <div class="container is-max-desktop has-text-centered">
+    <h2 class="title is-3 section-title">Leaderboard</h2>
+    <figure style="margin-top:0.5rem;">
+      <img src="static/images/model_performance.png" alt="Aggregate P/R/F performance across evaluated models">
+      <p class="caption">Aggregate P/R/F performance. Many models preserve stronger P or R accuracy while dropping on F.</p>
+    </figure>
+    <p class="affil" style="margin-top:0.8rem;">
+      Full per-model results and the evaluation harness are in the
+      <a href="https://github.com/hexixiang/StemBind" target="_blank" rel="noopener">code repository</a>.
+    </p>
+  </div>
+</section>
+
+<!-- ===================== CITATION ===================== -->
+<section class="section">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3 section-title">Citation</h2>
+    <pre class="bibtex">@article{he2026stembind,
+  title   = {StemBind: When MLLMs Get Lost Between Rules and Instances in Abstract Visual Reasoning},
+  author  = {He, Xixiang and Wu, Baiqi and Li, Xingming and Cheng, Ao and Sun, Qiyao and Ji, Xuanyu and Hu, Qingyong},
+  journal = {arXiv preprint arXiv:XXXX.XXXXX},
+  year    = {2026}
+}</pre>
+  </div>
+</section>
+
+<!-- ===================== FOOTER ===================== -->
+<footer class="footer" style="padding:2rem 1.5rem;">
+  <div class="container has-text-centered affil">
+    <p>
+      This page uses the
+      <a href="https://github.com/eliahuhorwitz/Academic-project-page-template" target="_blank" rel="noopener">Academic Project Page Template</a>.
+      Content is released under the repository license.
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
