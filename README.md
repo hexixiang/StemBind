@@ -1,7 +1,7 @@
 <h1 align="center">StemBind: When MLLMs Get Lost Between Rules and Instances in Abstract Visual Reasoning</h1>
 
 <p align="center">
-  <a href="https://arxiv.org/abs/XXXX.XXXXX"><img src="https://img.shields.io/badge/arXiv-XXXX.XXXXX-b31b1b.svg" alt="arXiv"></a>
+  <a href="https://arxiv.org/abs/2606.00148"><img src="https://img.shields.io/badge/arXiv-2606.00148-b31b1b.svg" alt="arXiv"></a>
   <a href="https://hexixiang.github.io/StemBind/"><img src="https://img.shields.io/badge/Project-Page-1f72c2.svg" alt="Project Page"></a>
   <a href="https://huggingface.co/datasets/user48271/Stembind"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20HuggingFace-Dataset-ffce44.svg" alt="Dataset"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-3a8a3a.svg" alt="License"></a>
@@ -71,7 +71,7 @@ StemBind/
 @article{he2026stembind,
   title   = {StemBind: When MLLMs Get Lost Between Rules and Instances in Abstract Visual Reasoning},
   author  = {He, Xixiang and Wu, Baiqi and Li, Xingming and Cheng, Ao and Sun, Qiyao and Ji, Xuanyu and Hu, Qingyong},
-  journal = {arXiv preprint arXiv:XXXX.XXXXX},
+  journal = {arXiv preprint arXiv:2606.00148},
   year    = {2026}
 }
 ```
