@@ -8,6 +8,11 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-3a8a3a.svg" alt="License"></a>
 </p>
 
+## 🔥 News
+
+- **[2026.09]** 🎉🎉 **StemBind** is accepted by **NeurIPS 2026**!
+- **[2026.05]** 🔥 StemBind is released on [arXiv](https://arxiv.org/abs/2606.00148), with a [project page](https://hexixiang.github.io/StemBind/) and public [leaderboard](https://hexixiang.github.io/StemBind/#leaderboard).
+
 <p align="center">
   <img src="docs/static/images/teaser.png" width="95%" alt="StemBind overview: nine RI/VP operations, shared-stem P/R/F probes, and S1-S4 process stages.">
 </p>
