@@ -99,6 +99,7 @@
     .tag.prop { background: #fdf2e9; color: #9a3412; }
     .tag.open { background: #ecfdf3; color: #166534; }
     .note { margin-top: 12px; font-size: 0.9rem; color: var(--muted); }
+    .lb-figure { margin-bottom: 28px; }
 
     /* code */
     pre {
@@ -185,7 +186,11 @@
 <section id="leaderboard">
   <div class="wrap">
     <h2>Leaderboard</h2>
-    <p class="muted">Overall accuracy (%) on the full benchmark. Click a column to sort. R − F is the rule-to-full drop.</p>
+    <figure class="lb-figure">
+      <img src="static/images/model_performance.png" alt="Overall Perception, Rule and Full accuracy of representative models">
+      <figcaption>Overall P / R / F accuracy (%) of representative models.</figcaption>
+    </figure>
+    <p class="muted">All 24 models on the full benchmark. Click a column to sort. R − F is the rule-to-full drop.</p>
     <div class="table-wrap">
       <table id="lb">
         <thead>

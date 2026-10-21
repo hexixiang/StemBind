@@ -34,7 +34,17 @@ Xixiang He<sup>1</sup>, Baiqi Wu<sup>2</sup>, Xingming Li<sup>1</sup>, Ao Cheng<
 
 ## Leaderboard
 
-Overall accuracy (%) on the full benchmark, sorted by F. Per-operation scores and thinking-mode deltas are in Table 2 of the paper.
+<p align="center">
+  <img src="docs/static/images/model_performance.png" width="100%" alt="Overall Perception, Rule and Full accuracy of representative models">
+</p>
+
+Overall P / R / F accuracy (%) of representative models. Full-item accuracy stays low even for the strongest models.
+
+<details>
+<summary><b>Full results for all 24 models</b></summary>
+<br>
+
+Sorted by F. Per-operation scores and thinking-mode deltas are in Table 2 of the paper.
 
 | # | Model | Type | P | R | F | R − F |
 |:-:|:--|:--|--:|--:|--:|--:|
@@ -62,6 +72,8 @@ Overall accuracy (%) on the full benchmark, sorted by F. Per-operation scores an
 | 22 | InternVL3.5-4B | Open | 36.8 | 27.9 | **24.8** | +3.1 |
 | 23 | InternVL3.5-2B | Open | 34.9 | 29.4 | **23.1** | +6.3 |
 | 24 | InternVL3.5-1B | Open | 30.6 | 24.8 | **20.7** | +4.1 |
+
+</details>
 
 Rule accuracy exceeds full-item accuracy for 22 of 24 models: most models can state the rule but fail to bind it to the right option.
 
