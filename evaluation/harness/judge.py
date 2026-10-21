@@ -7,21 +7,19 @@ returns 4 independent 0/1 verdicts.
   * Skipped or content-wrong stages both receive 0; the first 0 in the
     S1→S4 order is the first-failure stage used by L3 AttrTag.
   * Ambiguous / missing judge output is treated as 0 (conservative).
-  * We support n_repeat ≥ 1 (default 3) with temperature 0 and report the
-    majority vote + per-stage std.
+  * n_repeat >= 1 calls (default 1, GPT-4o at temperature 0 as in the paper)
+    are combined by per-stage majority vote; per-stage std is reported.
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import statistics
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from .model_router import ChatResult, ModelCaller, StubModelCaller
+from .model_router import ChatResult, ModelCaller
 
 STAGE_KEYS = ("S1", "S2", "S3", "S4")
 GT_FIELDS = ("S1_encode", "S2_infer", "S3_map", "S4_apply")
@@ -106,30 +104,22 @@ def _extract_json_obj(raw: str) -> dict[str, Any]:
     return {}
 
 
+def _first_failure(stages: dict[str, int]) -> str:
+    return next((k for k in STAGE_KEYS if stages[k] == 0), "")
+
+
 def parse_judge_output(raw: str) -> dict[str, Any]:
     obj = _extract_json_obj(raw)
     stages = {}
     for k in STAGE_KEYS:
-        v = obj.get(k, 0)
         try:
-            stages[k] = 1 if int(v) == 1 else 0
+            stages[k] = 1 if int(obj.get(k, 0)) == 1 else 0
         except (TypeError, ValueError):
             stages[k] = 0
-    ff = str(obj.get("first_failure", "")).strip().upper()
-    if ff not in STAGE_KEYS and ff not in {"NONE", ""}:
-        ff = ""
-    if ff == "NONE":
-        ff = ""
-    # Recompute for consistency against stages (conservative):
-    for k in STAGE_KEYS:
-        if stages[k] == 0:
-            ff = k
-            break
-    else:
-        ff = ""
+    # first_failure is recomputed from the stage flags rather than trusted.
     return {
         "stages": stages,
-        "first_failure": ff,
+        "first_failure": _first_failure(stages),
         "rationale": str(obj.get("rationale", "")).strip()[:400],
     }
 
@@ -153,17 +143,10 @@ class Judge:
         self.caller = caller
         self.cfg = config or JudgeConfig()
 
-    def judge(
-        self,
-        *,
-        question: str,
-        trace: str,
-        gt_steps: dict[str, str],
-    ) -> JudgeResult:
+    def judge(self, *, question: str, trace: str, gt_steps: dict[str, str]) -> JudgeResult:
         messages = build_judge_prompt(question=question, trace=trace, gt_steps=gt_steps)
         per_stage: dict[str, list[int]] = {k: [] for k in STAGE_KEYS}
         raws: list[str] = []
-        first_failures: list[str] = []
         rationale = ""
         for _ in range(max(1, self.cfg.n_repeat)):
             raw = self.caller(
@@ -172,116 +155,42 @@ class Judge:
                 temperature=self.cfg.temperature,
                 timeout=self.cfg.timeout,
                 extra=self.cfg.extra_payload or None,
-            )
-            raws.append(raw.final_text)
-            parsed = parse_judge_output(raw.final_text)
+            ).final_text
+            raws.append(raw)
+            parsed = parse_judge_output(raw)
             for k in STAGE_KEYS:
                 per_stage[k].append(parsed["stages"][k])
-            first_failures.append(parsed["first_failure"])
             rationale = parsed["rationale"] or rationale
 
         # Majority vote per stage (ties -> 0, conservative).
-        stages = {
-            k: 1 if sum(per_stage[k]) > len(per_stage[k]) / 2 else 0
-            for k in STAGE_KEYS
-        }
-        # Recompute first_failure from voted stages.
-        ff = ""
-        for k in STAGE_KEYS:
-            if stages[k] == 0:
-                ff = k
-                break
-        std = {
-            k: statistics.pstdev(per_stage[k]) if len(per_stage[k]) > 1 else 0.0
-            for k in STAGE_KEYS
-        }
-        return JudgeResult(stages=stages, first_failure=ff, rationale=rationale, std=std, raw=raws)
+        stages = {k: 1 if sum(v) > len(v) / 2 else 0 for k, v in per_stage.items()}
+        std = {k: statistics.pstdev(v) if len(v) > 1 else 0.0 for k, v in per_stage.items()}
+        return JudgeResult(
+            stages=stages, first_failure=_first_failure(stages), rationale=rationale, std=std, raw=raws,
+        )
 
 
-# --- Stub judge (tests / dry-run) -----------------------------------------
+# --- Stub judge (dry-run) -------------------------------------------------
 
 
 class StubJudge:
-    """Deterministic judge: passes stages whose GT keywords appear in the trace."""
+    """Offline judge: a stage passes if one of its first ground-truth words appears in the trace."""
 
-    def __init__(self, keywords_per_stage: int = 6):
-        self.k = keywords_per_stage
-
-    def __call__(
-        self,
-        *,
-        model: str,
-        messages: list[dict[str, Any]],
-        temperature: float = 0.0,
-        timeout: int = 120,
-        extra: dict[str, Any] | None = None,
-    ) -> ChatResult:
-        # Extract trace + gt_steps from the user message we built.
-        user_text = ""
-        for m in messages:
-            if m.get("role") == "user":
-                c = m.get("content")
-                user_text = c if isinstance(c, str) else ""
-                break
-        trace = _between(user_text, "===BEGIN TRACE===", "===END TRACE===")
-        gt = {}
-        for key, label in zip(GT_FIELDS, STAGE_KEYS):
-            gt[label] = _after(user_text, f"- {key}:")
-        stages = {
-            s: 1 if _keyword_overlap(trace, gt.get(s, ""), self.k) else 0
-            for s in STAGE_KEYS
-        }
-        ff = ""
-        for s in STAGE_KEYS:
-            if stages[s] == 0:
-                ff = s
-                break
-        payload = {
-            **stages,
-            "first_failure": ff or "none",
-            "rationale": "stub: keyword overlap",
-        }
-        return ChatResult(content=json.dumps(payload, ensure_ascii=False))
+    def __call__(self, *, messages: list[dict[str, Any]], **_: Any) -> ChatResult:
+        user_text = next((m["content"] for m in messages if m.get("role") == "user"), "")
+        start, end = user_text.find("===BEGIN TRACE==="), user_text.find("===END TRACE===")
+        trace = user_text[start:end] if 0 <= start < end else ""
+        stages = {}
+        for key, stage in zip(GT_FIELDS, STAGE_KEYS):
+            marker = f"- {key}:"
+            line = user_text[user_text.find(marker) + len(marker):].split("\n", 1)[0] if marker in user_text else ""
+            words = re.findall(r"\w+", line)[:6]
+            stages[stage] = int(any(w in trace for w in words))
+        return ChatResult(content=json.dumps({**stages, "rationale": "stub: keyword overlap"}))
 
 
-def _between(text: str, start: str, end: str) -> str:
-    a = text.find(start)
-    if a < 0:
-        return ""
-    b = text.find(end, a + len(start))
-    if b < 0:
-        return ""
-    return text[a + len(start):b].strip()
-
-
-def _after(text: str, marker: str) -> str:
-    a = text.find(marker)
-    if a < 0:
-        return ""
-    line_end = text.find("\n", a)
-    return text[a + len(marker): line_end if line_end > 0 else len(text)].strip()
-
-
-def _keyword_overlap(trace: str, gt: str, k: int) -> bool:
-    if not trace or not gt:
-        return False
-    tokens = [t for t in re.split(r"[\s，。、,./();\[\]:：；;]+", gt) if t]
-    if not tokens:
-        return False
-    # pick first k tokens; pass if any appears in trace
-    for tok in tokens[:k]:
-        if tok and tok in trace:
-            return True
-    return False
-
-
-# --- Factory --------------------------------------------------------------
-
-
-def build_judge(*, dry_run: bool = True, config: JudgeConfig | None = None) -> Judge:
-    if dry_run:
-        return Judge(StubJudge(), config or JudgeConfig(n_repeat=1))
+def build_judge(*, dry_run: bool, config: JudgeConfig | None = None) -> Judge:
     from .model_router import build_caller
 
-    caller = build_caller(dry_run=False)
+    caller = StubJudge() if dry_run else build_caller(dry_run=False)
     return Judge(caller, config or JudgeConfig())

@@ -44,7 +44,7 @@ def stem_coherent_by_model(
 
     by_model: dict[str, list[int]] = defaultdict(list)
     skipped: dict[str, int] = defaultdict(int)
-    for (model, item_id), slot in by_model_item.items():
+    for (model, _item), slot in by_model_item.items():
         if not slot["P"]:
             skipped[model] += 1
             continue

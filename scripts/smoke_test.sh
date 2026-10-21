@@ -1,58 +1,36 @@
 #!/usr/bin/env bash
+# Offline check of the full pipeline on a two-stem synthetic fixture.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "${ROOT}"
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+OUT=outputs/smoke
+DATA="${OUT}/data"
+rm -rf "${OUT}" && mkdir -p "${DATA}"
 
-OUT_DIR="outputs/smoke"
-FIXTURE_DIR="${OUT_DIR}/synthetic_fixture"
-RUN_DIR="${OUT_DIR}/run"
-JUDGED="${OUT_DIR}/predictions_answer_judged.jsonl"
-METRICS_DIR="${OUT_DIR}/metrics"
-
-rm -rf "${OUT_DIR}"
-mkdir -p "${FIXTURE_DIR}/manifests" "${RUN_DIR}" "${METRICS_DIR}"
-
-cat > "${FIXTURE_DIR}/manifests/items.jsonl" <<'JSONL'
-{"item_id":"synthetic_001","source":"synthetic_fixture","image_path":"items/synthetic_001.png"}
-{"item_id":"synthetic_002","source":"synthetic_fixture","image_path":"items/synthetic_002.png"}
+cat > "${DATA}/metadata.jsonl" <<'JSONL'
+{"file_name":"images/000001.png","F":"Choose the option that follows the left-to-right position cycle.","R":{"q":"Which rule governs the sequence?","a":"The marker moves one cell to the right in each panel.","difficulty":"medium"},"P":[{"q":"Where is the marker in the first panel?","a":"left cell","panel_ref":"panel_1","attr_type":"position","difficulty":"easy"},{"q":"Where is the marker in the second panel?","a":"center cell","panel_ref":"panel_2","attr_type":"position","difficulty":"easy"}],"s1":"Identify marker positions in the panels.","s2":"Infer a left-to-right position cycle.","s3":"Map the next position to the missing slot.","s4":"Only option A places the marker in the right cell, so A is correct."}
+{"file_name":"images/000002.png","F":"Choose the option equivalent to the rotated block.","R":{"q":"Which rule governs the item?","a":"Rotation equivalence.","difficulty":"medium"},"P":[{"q":"What is the block's coarse shape?","a":"L shape","panel_ref":"panel_1","attr_type":"shape","difficulty":"easy"}],"s1":"Identify the L-shaped block.","s2":"Infer rotation equivalence.","s3":"Compare rotated candidates to the target.","s4":"Option B is the rotated block, so B is correct."}
 JSONL
 
-cat > "${FIXTURE_DIR}/answers.jsonl" <<'JSONL'
-{"item_id":"synthetic_001","answer":"A"}
-{"item_id":"synthetic_002","answer":"B"}
+cat > "${DATA}/labels.jsonl" <<'JSONL'
+{"file_name":"images/000001.png","operation":"RI-Pos","perception_load":"Type-R","answer":"A"}
+{"file_name":"images/000002.png","operation":"VP-Rot","perception_load":"Type-P","answer":"B"}
 JSONL
 
-cat > "${FIXTURE_DIR}/machine_labels_with_ability.jsonl" <<'JSONL'
-{"item_id":"synthetic_001","A_operation_type":"RI-Pos"}
-{"item_id":"synthetic_002","A_operation_type":"VP-Rot"}
-JSONL
+CLI="python3 evaluation/cli.py"
+DS=(--dataset-dir "${DATA}" --labels "${DATA}/labels.jsonl")
 
-cat > "${FIXTURE_DIR}/annotations.jsonl" <<'JSONL'
-{"item_id":"synthetic_001","parsed":{"f_stem_en":"Synthetic fixture: choose the option that follows a left-to-right position cycle.","r_probe":{"q":"Which rule governs the synthetic sequence?","choices":["position cycle","color swap","count increase","mirror flip"],"a":"position cycle","answer_index":0},"p_probes":[{"q":"Where is the marker in the first synthetic panel?","a":"left cell","panel_ref":"panel_1","attr_type":"position"},{"q":"Where is the marker in the second synthetic panel?","a":"center cell","panel_ref":"panel_2","attr_type":"position"}],"steps_en":{"S1_encode":"Identify marker positions in the synthetic panels.","S2_infer":"Infer a left-to-right position cycle.","S3_map":"Map the next position to the candidate slots.","S4_apply":"Select option A."}}}
-{"item_id":"synthetic_002","parsed":{"f_stem_en":"Synthetic fixture: choose the option equivalent to a rotated block.","r_probe":{"q":"Which rule governs the synthetic item?","choices":["rotation equivalence","size ordering","line style","quantity addition"],"a":"rotation equivalence","answer_index":0},"p_probes":[{"q":"What is the synthetic block's coarse shape?","a":"L shape","panel_ref":"panel_1","attr_type":"shape"},{"q":"Which transformation is visually suggested?","a":"rotation","panel_ref":"panel_2","attr_type":"orientation"}],"steps_en":{"S1_encode":"Identify the synthetic L-shaped block.","S2_infer":"Infer rotation equivalence.","S3_map":"Compare rotated candidates to the target.","S4_apply":"Select option B."}}}
-JSONL
+${CLI} validate "${DS[@]}"
+${CLI} run "${DS[@]}" --models stub-model --out-dir "${OUT}/run"
+${CLI} answer-judge "${DS[@]}" --predictions "${OUT}/run/predictions.jsonl"
+${CLI} judge "${DS[@]}" --predictions "${OUT}/run/predictions_answer_judged.jsonl"
+${CLI} metrics --predictions "${OUT}/run/predictions_judged.jsonl" --out-dir "${OUT}/metrics"
+${CLI} run "${DS[@]}" --models stub-model --out-dir "${OUT}/ssa" --tasks F \
+  --conditions H0 H1 H2 H3 H4 H1_irrelevant
+${CLI} ssa --predictions "${OUT}/ssa/predictions.jsonl" --out "${OUT}/ssa/ssa.json" --n-boot 100
 
-python3 evaluation/cli.py validate \
-  --dataset-dir "${FIXTURE_DIR}"
+${CLI} run "${DS[@]}" --models stub-think=stub-model --out-dir "${OUT}/think"
+${CLI} thinkgain --pairs stub-model:stub-think --out "${OUT}/thinkgain.json" \
+  --predictions "${OUT}/run/predictions.jsonl" "${OUT}/think/predictions.jsonl"
 
-python3 evaluation/cli.py --dry-run run \
-  --dataset-dir "${FIXTURE_DIR}" \
-  --out-dir "${RUN_DIR}" \
-  --models stub-model \
-  --conditions text-only \
-  --limit 2 \
-  --max-p-per-item 2
-
-python3 evaluation/cli.py --dry-run answer-judge \
-  --predictions "${RUN_DIR}/predictions.jsonl" \
-  --dataset-dir "${FIXTURE_DIR}" \
-  --out "${JUDGED}" \
-  --judge-model stub-judge \
-  --max-p-per-item 2
-
-python3 evaluation/cli.py metrics \
-  --predictions "${JUDGED}" \
-  --out-dir "${METRICS_DIR}"
-
-echo "Smoke test completed: ${OUT_DIR}"
+echo "Smoke test passed: ${OUT}"

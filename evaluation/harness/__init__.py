@@ -1,11 +1,10 @@
 """StemBind evaluation harness.
 
-Modular components:
-
-- data_loader: load unified dataset into evaluation records
-- prompt_builder: F / P / R / L2-trace prompts (only locks <ANSWER>X</ANSWER>)
-- input_conditions: text-only / caption-only / parse-only / full-image
-- model_router: route model names to API callers (real + stub)
-- runner: orchestrate calls with checkpointed cache
-- judge: LLM judge for L2 S1-S4 alignment on natural traces
+- data_loader       load the Hugging Face release into F / P / R tasks
+- input_conditions  full-image, text-only and SSA H0..H4 conditions
+- prompt_builder    prompts and <ANSWER> parsing
+- model_router      OpenAI-compatible caller and offline stub
+- runner            cached, resumable prediction runs
+- answer_judge      LLM-judged answer correctness for free-form P / R answers
+- judge             L2 judge aligning free traces to S1-S4 targets
 """

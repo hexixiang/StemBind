@@ -1,24 +1,30 @@
-"""Route model names to provider-specific call implementations.
+"""Model callers: an OpenAI-compatible HTTP client and a deterministic stub.
 
-Real backends use an OpenAI-compatible chat/completions endpoint (`common.vlm`).
-For tests / `--dry-run` we expose a `StubModelCaller` which never touches the
-network; it returns deterministic, model-aware synthetic traces.
+The live caller talks to any `/chat/completions` endpoint (OpenAI, vLLM,
+SGLang, ...) configured by OPENAI_API_BASE and OPENAI_API_KEY. The stub never
+touches the network and is used by `--dry-run`.
 """
 
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import os
-import sys
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
-# Re-use the existing openai-compatible helper without duplicating.
-_DATA_PROCESSING_DIR = Path(__file__).resolve().parents[2] / "data_processing"
-if str(_DATA_PROCESSING_DIR) not in sys.path:
-    sys.path.insert(0, str(_DATA_PROCESSING_DIR))
+
+@dataclass
+class ChatResult:
+    content: str
+    reasoning_content: str = ""
+
+    @property
+    def final_text(self) -> str:
+        return self.content or ""
 
 
 class ModelCaller(Protocol):
@@ -30,34 +36,76 @@ class ModelCaller(Protocol):
         temperature: float = 0.0,
         timeout: int = 120,
         extra: dict[str, Any] | None = None,
-    ) -> "ChatResult":
+    ) -> ChatResult:
         ...
 
 
-@dataclass
-class ChatResult:
-    content: str
-    reasoning_content: str = ""
-    raw_response: dict[str, Any] | None = None
-
-    @property
-    def final_text(self) -> str:
-        return self.content or ""
+# --- Live caller ----------------------------------------------------------
 
 
-# --- Real (network) caller ------------------------------------------------
+def _salvage_partial_response(body: bytes) -> dict[str, Any] | None:
+    """Recover the message text from a truncated JSON body, if possible."""
+    text = body.decode("utf-8", errors="replace")
+    decoder = json.JSONDecoder()
+    for key in ('"content"', '"reasoning_content"', '"reasoning"'):
+        start = 0
+        while (idx := text.find(key, start)) >= 0:
+            start = idx + len(key)
+            colon = text.find(":", start)
+            if colon < 0:
+                break
+            try:
+                value, _ = decoder.raw_decode(text[colon + 1:].lstrip())
+            except json.JSONDecodeError:
+                continue
+            if isinstance(value, str) and value.strip():
+                field = key.strip('"')
+                message = {"content": value} if field == "content" else {"content": "", field: value}
+                return {"choices": [{"message": message}]}
+    return None
+
+
+def _post_json(url: str, api_key: str, payload: dict[str, Any], timeout: int) -> dict[str, Any]:
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            try:
+                body = resp.read()
+            except http.client.IncompleteRead as exc:
+                salvaged = _salvage_partial_response(exc.partial)
+                if salvaged is None:
+                    raise RuntimeError(f"IncompleteRead ({len(exc.partial)} bytes read)") from exc
+                return salvaged
+            return json.loads(body.decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:1000].replace("\n", " ")
+        raise RuntimeError(f"HTTP Error {exc.code}: {exc.reason}; body={detail}") from exc
+
+
+def _message_parts(response: dict[str, Any]) -> tuple[str, str]:
+    """Return (content, reasoning_content) from a chat/completions response."""
+    if not response.get("choices"):
+        return "", ""
+    message = response["choices"][0].get("message", {})
+    content = message.get("content") or ""
+    if isinstance(content, list):
+        content = "\n".join(
+            part.get("text", "") for part in content
+            if isinstance(part, dict) and part.get("type") == "text"
+        )
+    reasoning = message.get("reasoning_content") or message.get("reasoning") or ""
+    return str(content), str(reasoning)
 
 
 @dataclass
 class OpenAICompatibleCaller:
     api_base: str
     api_key: str
-
-    def _normalize(self) -> str:
-        base = (self.api_base or "").rstrip("/")
-        if base.endswith("/chat/completions"):
-            return base
-        return f"{base}/chat/completions"
 
     def __call__(
         self,
@@ -68,75 +116,23 @@ class OpenAICompatibleCaller:
         timeout: int = 120,
         extra: dict[str, Any] | None = None,
     ) -> ChatResult:
-        from common.vlm import call_openai_compatible, response_parts  # type: ignore
-
-        payload_extra = _env_extra_payload()
-        if extra:
-            payload_extra.update(extra)
-        resp = call_openai_compatible(
-            api_base=self._normalize(),
-            api_key=self.api_key,
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            timeout=timeout,
-            extra_payload=payload_extra or None,
-        )
-        parts = response_parts(resp)
-        return ChatResult(
-            content=parts.get("content", ""),
-            reasoning_content=parts.get("reasoning_content", ""),
-            raw_response=resp,
-        )
+        url = self.api_base.rstrip("/")
+        if not url.endswith("/chat/completions"):
+            url += "/chat/completions"
+        payload = {"model": model, "messages": messages, "temperature": temperature, **(extra or {})}
+        content, reasoning = _message_parts(_post_json(url, self.api_key, payload, timeout))
+        return ChatResult(content=content, reasoning_content=reasoning)
 
 
-def _env_extra_payload() -> dict[str, Any]:
-    """Read optional OpenAI-compatible request-body extras from env.
-
-    vLLM exposes provider-specific settings such as `top_k` and
-    `chat_template_kwargs` as top-level request JSON fields. The OpenAI Python
-    SDK calls this `extra_body`; our urllib caller passes the same fields through
-    via `extra_payload`.
-    """
-    payload: dict[str, Any] = {}
-    for name in ("OPENAI_EXTRA_PAYLOAD_JSON", "OPENAI_EXTRA_BODY_JSON", "VLLM_EXTRA_BODY_JSON"):
-        raw = os.environ.get(name)
-        if not raw:
-            continue
-        try:
-            obj = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(f"{name} must be valid JSON.") from exc
-        if not isinstance(obj, dict):
-            raise RuntimeError(f"{name} must decode to a JSON object.")
-        payload.update(obj)
-
-    max_tokens = os.environ.get("OPENAI_MAX_TOKENS")
-    if max_tokens:
-        payload["max_tokens"] = int(max_tokens)
-
-    enable_thinking = os.environ.get("QWEN_ENABLE_THINKING")
-    if enable_thinking is not None:
-        chat_kwargs = dict(payload.get("chat_template_kwargs") or {})
-        chat_kwargs["enable_thinking"] = enable_thinking.lower() in {"1", "true", "yes", "on"}
-        payload["chat_template_kwargs"] = chat_kwargs
-
-    return payload
+# --- Stub caller ----------------------------------------------------------
 
 
-# --- Stub caller (dry-run / unit tests) -----------------------------------
-
-
-@dataclass
 class StubModelCaller:
-    """Deterministic synthetic caller that never hits the network.
+    """Deterministic offline caller for `--dry-run` and the smoke test.
 
-    The answer letter is derived from a hash of (model, task_id) so results are
-    reproducible across runs. Short natural trace mimics a real model to let
-    the judge path exercise itself.
+    The answer letter is derived from a hash of (model, prompt), so results are
+    reproducible across runs.
     """
-
-    letters: tuple[str, ...] = ("A", "B", "C", "D")
 
     def __call__(
         self,
@@ -151,68 +147,25 @@ class StubModelCaller:
         for m in messages:
             content = m.get("content", "")
             if isinstance(content, list):
-                for c in content:
-                    if c.get("type") == "text":
-                        text_parts.append(c.get("text", ""))
+                text_parts.extend(c.get("text", "") for c in content if c.get("type") == "text")
             elif isinstance(content, str):
                 text_parts.append(content)
-        key = f"{model}||{''.join(text_parts)[:2048]}".encode("utf-8")
-        h = hashlib.sha256(key).hexdigest()
-        letter = self.letters[int(h[:2], 16) % len(self.letters)]
+        digest = hashlib.sha256(f"{model}||{''.join(text_parts)[:2048]}".encode("utf-8")).hexdigest()
+        letter = "ABCD"[int(digest[:2], 16) % 4]
         trace = (
             "[stub trace] Inspect the known panels, induce the visible rule, "
             "then apply it to the missing slot and compare the options.\n"
             f"Leaning towards option {letter}.\n"
             f"<ANSWER>{letter}</ANSWER>"
         )
-        return ChatResult(content=trace, reasoning_content="")
+        return ChatResult(content=trace)
 
 
-# --- Factory --------------------------------------------------------------
-
-
-def build_caller(*, dry_run: bool = True, api_base: str | None = None, api_key: str | None = None) -> ModelCaller:
+def build_caller(*, dry_run: bool) -> ModelCaller:
     if dry_run:
         return StubModelCaller()
-    base = api_base or os.environ.get("OPENAI_API_BASE")
-    key = api_key or os.environ.get("OPENAI_API_KEY")
-    if not base:
-        raise RuntimeError("Live caller requires OPENAI_API_BASE.")
-    if not key:
-        raise RuntimeError("Live caller requires OPENAI_API_KEY.")
+    base = os.environ.get("OPENAI_API_BASE")
+    key = os.environ.get("OPENAI_API_KEY")
+    if not base or not key:
+        raise RuntimeError("Live mode requires OPENAI_API_BASE and OPENAI_API_KEY.")
     return OpenAICompatibleCaller(api_base=base, api_key=key)
-
-
-# --- Known model registry (advisory, not enforced) ------------------------
-
-# Lightweight advisory manifest. The CLI accepts arbitrary model names and does
-# not hardcode provider-specific branching.
-KNOWN_MODELS: dict[str, dict[str, str]] = {
-    "gpt-4o": {"family": "openai", "role": "closed_flagship"},
-    "gpt-o3": {"family": "openai", "role": "thinking"},
-    "gpt-5.4-mini": {"family": "openai", "role": "closed_mini"},
-    "gemini-2.5-pro": {"family": "google", "role": "closed_flagship"},
-    "gemini-2.5-flash": {"family": "google", "role": "closed_mini"},
-    "claude-sonnet-4.5": {"family": "anthropic", "role": "closed_flagship"},
-    "claude-opus-4.6": {"family": "anthropic", "role": "judge"},
-    "qwen2.5-vl-3b-instruct": {"family": "qwen", "role": "scale_grad"},
-    "qwen2.5-vl-7b-instruct": {"family": "qwen", "role": "scale_grad"},
-    "qwen2.5-vl-32b-instruct": {"family": "qwen", "role": "scale_grad"},
-    "qwen2.5-vl-72b-instruct": {"family": "qwen", "role": "scale_grad"},
-    "qvq-72b": {"family": "qwen", "role": "thinking"},
-    "kimi-vl": {"family": "moonshot", "role": "mid_tier"},
-    "kimi-vl-thinking": {"family": "moonshot", "role": "thinking"},
-    "internvl3-38b": {"family": "shanghai-ai", "role": "mid_tier"},
-    "internvl3-78b": {"family": "shanghai-ai", "role": "mid_tier"},
-    "minicpm-v-2.6": {"family": "openbmb", "role": "mid_tier"},
-    "deepseek-vl2": {"family": "deepseek", "role": "mid_tier"},
-    "glm-4v-thinking": {"family": "zhipu", "role": "thinking"},
-}
-
-
-def describe(model: str) -> dict[str, str]:
-    return KNOWN_MODELS.get(model, {"family": "unknown", "role": "unknown"})
-
-
-# Type alias for callers that want to install a custom caller (tests/mocks).
-FactoryFn = Callable[..., ModelCaller]

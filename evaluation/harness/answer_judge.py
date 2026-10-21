@@ -59,16 +59,6 @@ class AnswerJudgeResult:
 
 
 def build_answer_judge_prompt(task: Task, row: dict[str, Any]) -> list[dict[str, Any]]:
-    choices = ""
-    if task.choices:
-        choices = "\n".join(f"{chr(65+i)}. {c}" for i, c in enumerate(task.choices))
-
-    reference = task.gold
-    if task.task_type == "R" and task.gold_index >= 0:
-        reference = f"{chr(65 + task.gold_index)}. {task.gold}"
-
-    candidate_answer = judge_candidate_answer(task, row)
-
     user = (
         "Determine whether the candidate response's final answer is correct.\n\n"
         "[Task Type]\n"
@@ -76,7 +66,7 @@ def build_answer_judge_prompt(task: Task, row: dict[str, Any]) -> list[dict[str,
         "[Question]\n"
         "{question}\n\n"
         "[Options]\n"
-        "{choices}\n\n"
+        "[none]\n\n"
         "[Reference Answer]\n"
         "{reference}\n\n"
         "[Program-Extracted Candidate Answer]\n"
@@ -100,9 +90,8 @@ def build_answer_judge_prompt(task: Task, row: dict[str, Any]) -> list[dict[str,
     ).format(
         task_type=task.task_type,
         question=task.question,
-        choices=choices or "[none]",
-        reference=reference,
-        prediction=candidate_answer,
+        reference=task.gold,
+        prediction=judge_candidate_answer(task, row),
         raw_text=judge_visible_response(row),
         schema=ANSWER_JUDGE_SCHEMA,
     )
@@ -120,13 +109,7 @@ def strip_think_tag(text: str) -> str:
 
 
 def judge_visible_response(row: dict[str, Any]) -> str:
-    """Return the text that answer-judge should inspect.
-
-    Newer Qwen-style responses may place visible chain-of-thought in a separate
-    `reasoning_content` field. In that case, `raw_text` should already contain
-    only the final answer content, so prefer it directly. The legacy
-    `<think>...</think>` cleanup remains as a fallback for older cached runs.
-    """
+    """Return the response text without any inline <think>...</think> block."""
     return strip_think_tag(str(row.get("raw_text", "")))
 
 
@@ -195,11 +178,7 @@ class AnswerJudge:
         return parse_answer_judge_output(raw.final_text)
 
 
-def exact_fallback_result(task: Task, row: dict[str, Any]) -> AnswerJudgeResult:
-    correct, _prediction = score_l1(task, row.get("raw_text", ""))
-    return AnswerJudgeResult(
-        correct=1 if correct else 0,
-        confidence="medium",
-        rationale="dry-run exact fallback",
-        raw="",
-    )
+def exact_fallback_result(task: Task, row: dict[str, Any], rationale: str) -> AnswerJudgeResult:
+    """Rule-based L1 correctness, used in dry runs and when the judge call fails."""
+    correct, _ = score_l1(task, row.get("raw_text", ""))
+    return AnswerJudgeResult(correct=int(correct), confidence="low", rationale=rationale)

@@ -78,59 +78,46 @@ Rule accuracy exceeds full-item accuracy for 22 of 24 models: most models can st
 
 ## Getting Started
 
-### Install
+**1. Install** (Python 3.9+)
 
 ```bash
-git clone https://github.com/hexixiang/StemBind.git
-cd StemBind
+git clone https://github.com/hexixiang/StemBind.git && cd StemBind
 pip install -r requirements.txt
-bash scripts/smoke_test.sh        # offline check on a synthetic fixture
 ```
 
-### Prepare the data
+**2. Download the data** from [Hugging Face](https://huggingface.co/datasets/user48271/Stembind)
 
 ```bash
-python scripts/prepare_data.py --out-dir data/stembind
+hf download user48271/Stembind --repo-type dataset \
+  --include "metadata.jsonl" --include "images/*" --local-dir data/stembind
 ```
 
-This downloads the [Hugging Face release](https://huggingface.co/datasets/user48271/Stembind) and writes the layout the harness reads ([schema](evaluation/README.md)). Pass `--hf-dir` to reuse a local copy.
-
-### Evaluate a model
-
-Any OpenAI-compatible endpoint works (OpenAI, vLLM, SGLang, etc.):
+**3. Evaluate** any model served behind an OpenAI-compatible API (OpenAI, vLLM, SGLang, ...)
 
 ```bash
-export OPENAI_API_BASE=https://your-endpoint/v1
-export OPENAI_API_KEY=...
+export OPENAI_API_BASE=https://your-endpoint/v1 OPENAI_API_KEY=...
+OUT=outputs/your-model
 
-# 1. P/R/F predictions
-python evaluation/cli.py --live run --dataset-dir data/stembind \
-  --models your-model --conditions full-image --out-dir outputs/your-model
-
-# 2. Answer grading for free-form P/R answers
-python evaluation/cli.py --live answer-judge --dataset-dir data/stembind \
-  --predictions outputs/your-model/predictions.jsonl --judge-model gpt-4o
-
-# 3. Optional: S1-S4 trace judging (GPT-4o, temperature 0, as in the paper)
-python evaluation/cli.py --live judge --dataset-dir data/stembind \
-  --predictions outputs/your-model/predictions_answer_judged.jsonl
-
-# 4. Metrics
-python evaluation/cli.py metrics \
-  --predictions outputs/your-model/predictions_judged.jsonl --out-dir outputs/your-model/metrics
+python evaluation/cli.py --live run --dataset-dir data/stembind --models your-model --out-dir $OUT
+python evaluation/cli.py --live answer-judge --dataset-dir data/stembind --predictions $OUT/predictions.jsonl
+python evaluation/cli.py --live judge --dataset-dir data/stembind --predictions $OUT/predictions_answer_judged.jsonl
+python evaluation/cli.py metrics --predictions $OUT/predictions_judged.jsonl --out-dir $OUT/metrics
 ```
 
-Skip step 3 to get P/R/F accuracy only; then point step 4 at `predictions_answer_judged.jsonl`. Commands run in `--dry-run` mode by default (stub model, no API calls); `--live` sends real requests. The `ssa` and `thinkgain` subcommands reproduce the SSA and thinking-mode analyses. Run `python evaluation/cli.py <command> -h` for all options.
+This produces P/R/F accuracy, the R–F gap and Binding Gap, and S1–S4 StepAcc in `$OUT/metrics/`. Both judges default to GPT-4o at temperature 0, as in the paper. See [evaluation/README.md](evaluation/README.md) for the metric files, SSA and ThinkGain. Without `--live`, every command runs offline with a stub model; `bash scripts/smoke_test.sh` checks the whole pipeline this way.
 
 ## Repository Structure
 
 ```text
 StemBind/
-├── evaluation/             # CLI, harness, judges, metrics, SSA, ThinkGain
-├── data_processing/common/ # OpenAI-compatible HTTP helper
-├── data/                   # answer key and operation labels per image
-├── scripts/                # data preparation and smoke test
-└── docs/                   # project page (GitHub Pages)
+├── evaluation/
+│   ├── cli.py          # entry point: run, answer-judge, judge, metrics, ssa, thinkgain
+│   ├── harness/        # data loading, prompts, model calls, judges
+│   ├── metrics/        # accuracy, Binding Gap, StepAcc, AttrTag, StemCoherent, VG
+│   └── experiments/    # SSA and ThinkGain
+├── data/               # operation, perception-load and answer labels per image
+├── scripts/            # offline smoke test
+└── docs/               # project page
 ```
 
 ## Citation

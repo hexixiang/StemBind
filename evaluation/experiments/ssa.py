@@ -1,27 +1,20 @@
-"""Stage Skyline Analysis.
+"""SSA (Stage-wise Stimulus Augmentation) scoring.
 
-Given per-(model, item, condition H0..H4) correctness, compute the isotonic
-skyline + per-step delta with bootstrap CI. The six guards are enforced
-upstream (prefill schema audit, irrelevant-control, position randomisation,
-subset exclusion for single-stage items). This module only does scoring.
+Input: F predictions run under conditions H0..H4 and H1_irrelevant (see
+`harness/input_conditions.py`). For each model this reports
 
-Condition keys expected in prediction rows:
-    condition ∈ {"H0","H1","H2","H3","H4","H1_irrelevant"}
-
-Raw chance-normalised accuracy:
-
-    g_i,m,h = (y - 1/K) / (1 - 1/K)    (K = 4 choices on F items)
-    A_m,h   = mean_i(g_i,m,h)
-
-Isotonic projection (monotone non-decreasing H0 ≤ H1 ≤ H2 ≤ H3 ≤ H4) uses the
-pool-adjacent-violators (PAV) algorithm.
+    raw accuracy per level, with bootstrap 95% CI over items,
+    chance-normalised accuracy  g = (acc - 1/K) / (1 - 1/K),  K = 4 options,
+    an isotonic (non-decreasing) fit over H0 <= ... <= H4 via pool-adjacent-violators,
+    the per-step gains of that fit, and the irrelevant-S1 control vs. H0.
 """
 
 from __future__ import annotations
 
-import random
 from collections import defaultdict
 from typing import Any, Iterable
+
+from ..metrics._utils import TBD, bootstrap_ci
 
 H_KEYS = ("H0", "H1", "H2", "H3", "H4")
 IRRELEVANT_KEY = "H1_irrelevant"
@@ -29,37 +22,18 @@ K_OPTIONS = 4
 
 
 def _chance_norm(acc: float, k: int = K_OPTIONS) -> float:
-    if k <= 1:
-        return acc
     return (acc - 1.0 / k) / (1.0 - 1.0 / k)
 
 
 def _isotonic_nondecreasing(values: list[float]) -> list[float]:
-    """Pool-Adjacent-Violators for a non-decreasing fit."""
-    if not values:
-        return []
-    v = list(values)
-    w = [1.0] * len(v)
-    i = 0
-    while i < len(v) - 1:
-        if v[i] > v[i + 1]:
-            # pool
-            total = v[i] * w[i] + v[i + 1] * w[i + 1]
-            wt = w[i] + w[i + 1]
-            pooled = total / wt
-            v[i] = pooled
-            v[i + 1 : i + 2] = []
-            w[i] = wt
-            w[i + 1 : i + 2] = []
-            if i > 0:
-                i -= 1
-        else:
-            i += 1
-    # expand pooled means back (simple repeat by original count)
-    expanded: list[float] = []
-    for val, wt in zip(v, w):
-        expanded.extend([val] * int(wt))
-    return expanded[: len(values)]
+    """Pool-adjacent-violators fit with equal weights."""
+    blocks: list[list[float]] = []  # [mean, size]
+    for v in values:
+        blocks.append([v, 1.0])
+        while len(blocks) > 1 and blocks[-2][0] > blocks[-1][0]:
+            (m1, w1), (m2, w2) = blocks[-2], blocks.pop()
+            blocks[-1] = [(m1 * w1 + m2 * w2) / (w1 + w2), w1 + w2]
+    return [m for m, w in blocks for _ in range(int(w))]
 
 
 def _per_model_acc(predictions: Iterable[dict[str, Any]]) -> dict[tuple[str, str], list[int]]:
@@ -71,64 +45,32 @@ def _per_model_acc(predictions: Iterable[dict[str, Any]]) -> dict[tuple[str, str
     return bucket
 
 
-def _bootstrap_ci(vals: list[int], *, seed: int, n_boot: int = 1000) -> tuple[float, float]:
-    if not vals:
-        return 0.0, 0.0
-    rng = random.Random(seed)
-    means = []
-    n = len(vals)
-    for _ in range(n_boot):
-        s = 0
-        for _ in range(n):
-            s += vals[rng.randrange(n)]
-        means.append(s / n)
-    means.sort()
-    return means[int(0.025 * n_boot)], means[int(0.975 * n_boot) - 1]
-
-
-def skyline(
-    predictions: Iterable[dict[str, Any]],
-    *,
-    seed: int = 20260417,
-    n_boot: int = 1000,
-) -> dict[str, Any]:
+def skyline(predictions: Iterable[dict[str, Any]], *, n_boot: int = 1000) -> dict[str, Any]:
     bucket = _per_model_acc(predictions)
-    models = sorted({m for (m, _h) in bucket})
     rows = []
-    for m in models:
-        raw_acc = {h: (sum(vals) / len(vals) if vals else 0.0) for h in H_KEYS
-                   for vals in [bucket.get((m, h), [])]}
+    for m in sorted({m for (m, _h) in bucket}):
+        raw_acc, ci95 = {}, {}
+        for h in H_KEYS:
+            mean, lo, hi = bootstrap_ci([float(v) for v in bucket.get((m, h), [])], n_boot=n_boot)
+            raw_acc[h], ci95[h] = mean, {"low": lo, "high": hi}
         cn = [_chance_norm(raw_acc[h]) for h in H_KEYS]
         iso = _isotonic_nondecreasing(cn)
-        cis = {}
-        for h_i, h in enumerate(H_KEYS):
-            vals = bucket.get((m, h), [])
-            cis[h] = _bootstrap_ci(vals, seed=seed + h_i * 1009, n_boot=n_boot)
-        deltas_pp = [100.0 * (iso[i] - iso[i - 1]) for i in range(1, len(iso))]
-        irrelevant_vals = bucket.get((m, IRRELEVANT_KEY), [])
-        irrelevant_acc = sum(irrelevant_vals) / len(irrelevant_vals) if irrelevant_vals else None
-        row = {
+        irrelevant = bucket.get((m, IRRELEVANT_KEY), [])
+        irrelevant_acc = sum(irrelevant) / len(irrelevant) if irrelevant else None
+        rows.append({
             "model": m,
             "raw_acc": raw_acc,
-            "chance_normalised": {h: cn[i] for i, h in enumerate(H_KEYS)},
-            "isotonic_skyline": {h: iso[i] for i, h in enumerate(H_KEYS)},
-            "skyline_deltas_pp": {f"H{i}->H{i+1}": deltas_pp[i] for i in range(len(deltas_pp))},
-            "ci95": {h: {"low": cis[h][0], "high": cis[h][1]} for h in H_KEYS},
+            "ci95": ci95,
+            "chance_normalised": dict(zip(H_KEYS, cn)),
+            "isotonic": dict(zip(H_KEYS, iso)),
+            "isotonic_gain_pp": {
+                f"{H_KEYS[i - 1]}->{H_KEYS[i]}": 100.0 * (iso[i] - iso[i - 1]) for i in range(1, len(iso))
+            },
             "irrelevant_control": {
-                "acc": irrelevant_acc if irrelevant_acc is not None else "[TBD]",
+                "acc": irrelevant_acc if irrelevant_acc is not None else TBD,
                 "delta_vs_H0_pp": (
-                    100.0 * (_chance_norm(irrelevant_acc) - cn[0])
-                    if irrelevant_acc is not None else "[TBD]"
+                    100.0 * (_chance_norm(irrelevant_acc) - cn[0]) if irrelevant_acc is not None else TBD
                 ),
             },
-            "h1_jump_pp": deltas_pp[0] if deltas_pp else 0.0,
-            "h1_gate_pass": (
-                deltas_pp[0] >= 10.0
-                and (
-                    irrelevant_acc is None
-                    or (100.0 * (_chance_norm(irrelevant_acc) - cn[0])) <= 3.0
-                )
-            ) if deltas_pp else False,
-        }
-        rows.append(row)
-    return {"by_model": rows, "H_keys": list(H_KEYS)}
+        })
+    return {"by_model": rows}

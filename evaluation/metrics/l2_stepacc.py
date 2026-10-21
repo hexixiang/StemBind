@@ -102,7 +102,7 @@ def first_failure_rows(predictions: Iterable[dict[str, Any]]) -> list[dict[str, 
             "model": r.get("model"),
             "item_id": r.get("item_id"),
             "operation": r.get("operation"),
-            "perception_type": r.get("perception_type"),
+            "perception_load": r.get("perception_load"),
             "first_failure": ff,
             "f_correct": bool(r.get("correct")),
         })

@@ -1,69 +1,74 @@
-# StemBind Dataset Schema
+# Evaluation
 
-The evaluation CLI reads a dataset directory with the layout below.
-`scripts/prepare_data.py` builds it from the
-[Hugging Face release](https://huggingface.co/datasets/user48271/Stembind).
+All commands go through `evaluation/cli.py` and run in dry-run mode (stub model, no API calls) unless `--live` is given. `--live` reads `OPENAI_API_BASE` and `OPENAI_API_KEY` and works with any OpenAI-compatible `/chat/completions` endpoint.
 
-```text
-DATASET_DIR/
-  manifests/
-    items.jsonl
-  answers.jsonl
-  machine_labels_with_ability.jsonl
-  annotations.jsonl
-```
+## Data
 
-Optional legacy or auxiliary files:
+`--dataset-dir` points to a local copy of the [Hugging Face release](https://huggingface.co/datasets/user48271/Stembind):
 
 ```text
-DATASET_DIR/
-  probe_prelabels.jsonl
-  reasoning.jsonl
-  captions.jsonl
-  parses.jsonl
+data/stembind/
+├── metadata.jsonl   # one stem per line: file_name, F, R, P, s1-s4
+└── images/          # 000000.png ... 002297.png
 ```
 
-## Required Files
+| Field | Content |
+|---|---|
+| `F` | Full-item instruction (four options, A-D, shown in the image) |
+| `R` | Rule probe `{q, a}`, free-form |
+| `P` | Perception probes `[{q, a, panel_ref, attr_type}]`, 6-7 per stem |
+| `s1`-`s4` | S1 Encode, S2 Infer, S3 Map, S4 Apply targets |
 
-`manifests/items.jsonl`
+The operation type, perception-load tag and F answer letter of each image are in [`data/stembind_labels.jsonl`](../data/stembind_labels.jsonl), joined on `file_name`.
 
-- `item_id`: stable stem identifier.
-- `source`: source or split label.
-- `image_path`: image path relative to `DATASET_DIR`; required for
-  `full-image`, unused by `text-only` dry runs.
+## Pipeline
 
-`answers.jsonl`
+| Step | Command | Output |
+|---|---|---|
+| Predictions | `run` | `predictions.jsonl` |
+| Answer grading (P / R are free-form) | `answer-judge` | `predictions_answer_judged.jsonl` |
+| S1-S4 trace judging (optional) | `judge` | `predictions_judged.jsonl` |
+| Metrics | `metrics` | `metrics/*.json` |
 
-- `item_id`: identifier matching the manifest.
-- `answer`: final F-task answer letter, normalized to `A`/`B`/`C`/`D`.
+`run` caches every call under `<out-dir>/cache/`, so an interrupted run resumes where it stopped. Use `--concurrency` for parallel requests and `--limit N` to try the first N stems.
 
-`machine_labels_with_ability.jsonl`
+## Metrics
 
-- `item_id`: identifier matching the manifest.
-- `A_operation_type`: one of `RI-Pos`, `RI-Sty`, `RI-Attr`, `RI-Qty`,
-  `RI-Rel`, `VP-Fold`, `VP-View`, `VP-Rot`, `VP-Closure`.
+| File | Metric |
+|---|---|
+| `metrics_l1.json` | P / R / F accuracy with Wilson 95% CI, by operation and condition |
+| `binding.json` | R-F gap, stem-level failure decomposition (solved / can't bind / can't reason / can't see), strict Binding Gap `1 - P(F=1 \| P=1, R=1)` |
+| `metrics_l2.json` | L2 StepAcc per stage S1-S4, first-failure distribution, lucky-guess rate |
+| `metrics_l3.json` | L3 AttrTag: first-failure stage crossed with the perception-load tag |
+| `stem_coherent.json`, `stem_coherent_audit.json` | StemCoherent (all P, R and F correct on a stem) and its rank audit |
+| `vg.json` | Vision Gain: F accuracy with the image minus text-only (needs a `--conditions text-only` run) |
 
-`annotations.jsonl`
+## Diagnostics
 
-- `item_id`: identifier matching the manifest.
-- `parsed.f_stem_en`: English full-item prompt.
-- `parsed.p_probes`: list of perception probes with `q`, `a`, `panel_ref`,
-  and `attr_type`.
-- `parsed.r_probe`: rule probe with `q`, optional `choices`, `a`, and optional
-  `answer_index`.
-- `parsed.steps_en`: S1--S4 process targets using keys `S1_encode`,
-  `S2_infer`, `S3_map`, and `S4_apply`.
+**SSA (Stage-wise Stimulus Augmentation).** F items are re-run with verified stage content added cumulatively: `H0` (none) to `H4` (S1-S4), plus the `H1_irrelevant` control (S1 of another stem). Option letters are masked in all injected text.
 
-## Input Conditions
+```bash
+python evaluation/cli.py --live run --dataset-dir data/stembind --models your-model \
+  --tasks F --conditions H0 H1 H2 H3 H4 H1_irrelevant --out-dir outputs/ssa
+python evaluation/cli.py ssa --predictions outputs/ssa/predictions.jsonl --out outputs/ssa/ssa.json
+```
 
-- `text-only`: evaluates from textual task fields only.
-- `caption-only`: requires an auxiliary captions JSONL.
-- `parse-only`: requires an auxiliary parses JSONL.
-- `full-image`: requires images referenced by `manifests/items.jsonl`.
+**ThinkGain.** Thinking minus direct accuracy on P, R and F. When both modes use the same served model, give each run its own label with `label=model`:
 
-## Answer Key
+```bash
+python evaluation/cli.py --live run --dataset-dir data/stembind --out-dir outputs/qwen-direct \
+  --models qwen3.5-27b=Qwen/Qwen3.5-27B --enable-thinking false
+python evaluation/cli.py --live run --dataset-dir data/stembind --out-dir outputs/qwen-thinking \
+  --models qwen3.5-27b-thinking=Qwen/Qwen3.5-27B --enable-thinking true
+# after answer-judge on both runs:
+python evaluation/cli.py thinkgain --pairs qwen3.5-27b:qwen3.5-27b-thinking --out thinkgain.json \
+  --predictions outputs/qwen-{direct,thinking}/predictions_answer_judged.jsonl
+```
 
-The Hugging Face release states the F answer letter inside the `s4` target.
-`data/stembind_labels.jsonl` lists it per image together with the operation
-label, and `prepare_data.py` copies both into `answers.jsonl` and
-`machine_labels_with_ability.jsonl`.
+## Offline check
+
+```bash
+bash scripts/smoke_test.sh
+```
+
+Runs every command above on a two-stem synthetic fixture without network access.

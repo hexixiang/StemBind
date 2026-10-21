@@ -1,11 +1,13 @@
-"""Run models over tasks with checkpointed per-call cache.
+"""Run models over tasks with a per-call cache.
 
-A single `Prediction` row is appended to `predictions.jsonl`; each call is also
-written to `cache/<model>__<task_id>__<condition>.json` so reruns resume
-without re-paying for completed model/task/condition triples.
+Each (model, task, condition) result is written to
+`<out_dir>/cache/<model>__<task_id>__<condition>.json`, so an interrupted run
+resumes without repeating finished calls. Transient API errors are not cached
+and are retried on the next run. All results go to `<out_dir>/predictions.jsonl`.
 
-L1 (answer letter / P text match) is computed inline because the logic is
-cheap and deterministic. L2 / L3 downstream steps consume the cached traces.
+L1 correctness (exact option letter for F, normalized text match for P / R) is
+computed inline; `answer-judge` later replaces it with LLM-judged correctness
+for free-form answers.
 """
 
 from __future__ import annotations
@@ -13,31 +15,23 @@ from __future__ import annotations
 import json
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
 from .data_loader import Task
-from .input_conditions import VALID_CONDITIONS, apply_condition
-from .model_router import ModelCaller, StubModelCaller
-from .prompt_builder import (
-    build_messages,
-    extract_answer,
-    extract_answer_letter,
-    strip_answer_tag,
-)
+from .input_conditions import SSA_CONDITIONS, VALID_CONDITIONS, apply_condition
+from .model_router import ModelCaller
+from .prompt_builder import build_messages, extract_answer, extract_answer_letter, strip_answer_tag
 
 
-# --- Scoring helpers ------------------------------------------------------
+# --- L1 scoring -----------------------------------------------------------
 
 
 def _clean(text: Any) -> str:
-    s = str(text or "").strip().lower()
-    s = re.sub(r"\s+", "", s)
-    s = re.sub(r"[，。、“”‘’；;：:,.!?？！（）()\[\]{}<>《》|/\\_-]", "", s)
-    return s
+    s = re.sub(r"\s+", "", str(text or "").strip().lower())
+    return re.sub(r"[，。、“”‘’；;：:,.!?？！（）()\[\]{}<>《》|/\\_-]", "", s)
 
 
 def match_p_answer(pred: str, gold: str) -> bool:
@@ -46,31 +40,20 @@ def match_p_answer(pred: str, gold: str) -> bool:
         return False
     if p == g:
         return True
-    pn = re.findall(r"\d+", p)
-    gn = re.findall(r"\d+", g)
+    pn, gn = re.findall(r"\d+", p), re.findall(r"\d+", g)
     if pn and gn:
         return pn == gn
-    if len(g) <= 8 and g in p:
-        return True
-    if len(p) <= 8 and p in g:
-        return True
-    return False
+    return (len(g) <= 8 and g in p) or (len(p) <= 8 and p in g)
 
 
 def score_l1(task: Task, raw_text: str) -> tuple[bool, str]:
-    if task.task_type == "P":
-        pred = extract_answer(raw_text) or raw_text.strip()
-        return match_p_answer(pred, task.gold), pred
     if task.task_type == "F":
         letter = extract_answer_letter(raw_text)
         return letter == task.gold, letter
-    if not task.choices:
-        pred = extract_answer(raw_text) or raw_text.strip()
-        return _clean(pred) == _clean(task.gold), pred
-    letter = extract_answer_letter(raw_text)
-    # Legacy R probe: compare predicted letter index vs gold index
-    idx = "ABCD".index(letter) if letter in "ABCD" else -1
-    return idx == task.gold_index, letter
+    pred = extract_answer(raw_text) or raw_text.strip()
+    if task.task_type == "P":
+        return match_p_answer(pred, task.gold), pred
+    return _clean(pred) == _clean(task.gold), pred
 
 
 # --- Prediction record ----------------------------------------------------
@@ -81,8 +64,8 @@ class Prediction:
     task_id: str
     item_id: str
     task_type: str
-    source: str
     operation: str
+    perception_load: str | None
     model: str
     condition: str
     gold: str
@@ -91,24 +74,24 @@ class Prediction:
     raw_text: str
     trace: str
     reasoning_content: str = ""
-    timestamp: str = ""
     error: str | None = None
-    extras: dict[str, Any] = field(default_factory=dict)
-
-    def to_json(self) -> dict[str, Any]:
-        d = asdict(self)
-        return d
 
 
-# --- Cache paths ----------------------------------------------------------
+_TRANSIENT_ERRORS = (
+    "HTTP Error 408", "HTTP Error 409", "HTTP Error 425", "HTTP Error 429",
+    "HTTP Error 500", "HTTP Error 502", "HTTP Error 503", "HTTP Error 504",
+    "rate limit", "Rate limit", "timed out", "Connection reset", "Connection refused",
+    "Connection aborted", "Remote end closed connection", "urlopen error", "SSL:",
+    "EOF occurred", "IncompleteRead",
+)
 
 
-def _safe(name: str) -> str:
+def _is_transient_error(error: str) -> bool:
+    return any(marker in error for marker in _TRANSIENT_ERRORS)
+
+
+def safe_name(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", name)
-
-
-def cache_path(cache_dir: Path, *, model: str, task_id: str, condition: str) -> Path:
-    return cache_dir / f"{_safe(model)}__{_safe(task_id)}__{_safe(condition)}.json"
 
 
 # --- Runner ---------------------------------------------------------------
@@ -119,118 +102,80 @@ class RunConfig:
     models: list[str]
     conditions: list[str]
     out_dir: Path
-    dry_run: bool = True
-    max_side: int = 768
-    jpeg_quality: int = 80
     concurrency: int = 1
     timeout: int = 120
     max_retries: int = 2
-    temperature: float = 0.0
+    max_side: int = 768
+    jpeg_quality: int = 80
     encode_image: bool = True
+    temperature: float = 0.0
     extra_payload: dict[str, Any] = field(default_factory=dict)
-    cache_errors: bool = True
-
-    def validate(self) -> None:
-        if not self.models:
-            raise ValueError("At least one model is required.")
-        for c in self.conditions:
-            if c not in VALID_CONDITIONS:
-                raise ValueError(f"Unknown condition {c!r}")
 
 
 class Runner:
     def __init__(self, caller: ModelCaller, config: RunConfig):
+        if not config.models:
+            raise ValueError("At least one model is required.")
+        for c in config.conditions:
+            if c not in VALID_CONDITIONS:
+                raise ValueError(f"Unknown condition {c!r}; expected one of {VALID_CONDITIONS}")
         self.caller = caller
         self.cfg = config
-        self.cfg.validate()
-        self.cfg.out_dir = Path(self.cfg.out_dir)
-        (self.cfg.out_dir / "cache").mkdir(parents=True, exist_ok=True)
-
-    # ---- single call ----------------------------------------------------
+        self.cache_dir = Path(config.out_dir) / "cache"
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def run_one(self, task: Task, model: str, condition: str) -> Prediction:
-        cp = cache_path(self.cfg.out_dir / "cache", model=model, task_id=task.task_id, condition=condition)
-        if cp.exists():
-            cached = json.loads(cp.read_text(encoding="utf-8"))
-            return Prediction(**cached)
+        # `label=api_model` records results under `label` while calling `api_model`.
+        model, _, api_model = model.partition("=")
+        api_model = api_model or model
+        cache_file = self.cache_dir / f"{safe_name(model)}__{safe_name(task.task_id)}__{safe_name(condition)}.json"
+        if cache_file.exists():
+            return Prediction(**json.loads(cache_file.read_text(encoding="utf-8")))
 
-        ctx = apply_condition(condition=condition, caption=task.caption, parse=task.parse)
         messages = build_messages(
             task,
-            ctx,
+            apply_condition(task, condition),
             max_side=self.cfg.max_side,
             jpeg_quality=self.cfg.jpeg_quality,
             encode_image=self.cfg.encode_image,
         )
-
-        last_exc: Exception | None = None
-        raw_text = ""
-        reasoning_content = ""
+        raw_text, reasoning, error = "", "", None
         for attempt in range(self.cfg.max_retries + 1):
             try:
                 result = self.caller(
-                    model=model,
+                    model=api_model,
                     messages=messages,
                     temperature=self.cfg.temperature,
                     timeout=self.cfg.timeout,
                     extra=self.cfg.extra_payload or None,
                 )
-                raw_text = result.final_text
-                reasoning_content = result.reasoning_content or ""
+                raw_text, reasoning, error = result.final_text, result.reasoning_content, None
                 break
             except Exception as exc:  # noqa: BLE001
-                last_exc = exc
-                if attempt >= self.cfg.max_retries:
-                    raw_text = ""
-                    break
-                time.sleep(min(20.0, 2.5 * (attempt + 1)))
+                error = str(exc)
+                if attempt < self.cfg.max_retries:
+                    time.sleep(min(20.0, 2.5 * (attempt + 1)))
 
-        if last_exc is not None and not raw_text:
-            pred = Prediction(
-                task_id=task.task_id,
-                item_id=task.item_id,
-                task_type=task.task_type,
-                source=task.source,
-                operation=task.operation,
-                model=model,
-                condition=condition,
-                gold=task.gold,
-                prediction="",
-                correct=False,
-                raw_text="",
-                reasoning_content="",
-                trace="",
-                timestamp=datetime.now(timezone.utc).isoformat(),
-                error=str(last_exc),
-            )
-        else:
-            correct, prediction = score_l1(task, raw_text)
-            pred = Prediction(
-                task_id=task.task_id,
-                item_id=task.item_id,
-                task_type=task.task_type,
-                source=task.source,
-                operation=task.operation,
-                model=model,
-                condition=condition,
-                gold=task.gold,
-                prediction=prediction,
-                correct=correct,
-                raw_text=raw_text,
-                reasoning_content=reasoning_content,
-                trace=strip_answer_tag(raw_text),
-                timestamp=datetime.now(timezone.utc).isoformat(),
-            )
-
-        if self.cfg.cache_errors or not pred.error or not _is_transient_error(pred.error):
-            cp.parent.mkdir(parents=True, exist_ok=True)
-            cp.write_text(
-                json.dumps(pred.to_json(), ensure_ascii=False, indent=2) + "\n",
-                encoding="utf-8",
-            )
+        correct, prediction = (False, "") if error else score_l1(task, raw_text)
+        pred = Prediction(
+            task_id=task.task_id,
+            item_id=task.item_id,
+            task_type=task.task_type,
+            operation=task.operation,
+            perception_load=task.perception_load,
+            model=model,
+            condition=condition,
+            gold=task.gold,
+            prediction=prediction,
+            correct=correct,
+            raw_text=raw_text,
+            trace=strip_answer_tag(raw_text),
+            reasoning_content=reasoning,
+            error=error,
+        )
+        if not (error and _is_transient_error(error)):
+            cache_file.write_text(json.dumps(asdict(pred), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return pred
-
-    # ---- batch ----------------------------------------------------------
 
     def run(self, tasks: Iterable[Task]) -> list[Prediction]:
         tasks = list(tasks)
@@ -239,81 +184,13 @@ class Runner:
             for m in self.cfg.models
             for c in self.cfg.conditions
             for t in tasks
-            if _condition_feasible(t, c)
+            if c not in SSA_CONDITIONS or t.task_type == "F"  # SSA applies to F items only
         ]
-        results: list[Prediction] = []
-        if self.cfg.concurrency <= 1:
-            for t, m, c in units:
-                results.append(self.run_one(t, m, c))
-        else:
-            with ThreadPoolExecutor(max_workers=self.cfg.concurrency) as ex:
-                futures = {ex.submit(self.run_one, t, m, c): (t, m, c) for t, m, c in units}
-                for fut in as_completed(futures):
-                    results.append(fut.result())
+        with ThreadPoolExecutor(max_workers=max(1, self.cfg.concurrency)) as ex:
+            results = list(ex.map(lambda u: self.run_one(*u), units))
         results.sort(key=lambda r: (r.model, r.condition, r.task_id))
-        self._write_predictions(results)
-        return results
-
-    # ---- IO -------------------------------------------------------------
-
-    def _write_predictions(self, results: list[Prediction]) -> None:
-        path = self.cfg.out_dir / "predictions.jsonl"
-        with path.open("w", encoding="utf-8") as f:
+        out_file = Path(self.cfg.out_dir) / "predictions.jsonl"
+        with out_file.open("w", encoding="utf-8") as f:
             for r in results:
-                f.write(json.dumps(r.to_json(), ensure_ascii=False) + "\n")
-
-
-def _condition_feasible(task: Task, condition: str) -> bool:
-    """Skip conditions that require missing context for this task."""
-    if condition == "caption-only" and not task.caption:
-        return False
-    if condition == "parse-only" and not task.parse:
-        return False
-    return True
-
-
-def _is_transient_error(error: str) -> bool:
-    markers = (
-        "HTTP Error 502",
-        "HTTP Error 503",
-        "HTTP Error 504",
-        "HTTP Error 400",
-        "HTTP Error 408",
-        "HTTP Error 409",
-        "HTTP Error 425",
-        "HTTP Error 429",
-        "Bad Request",
-        "Too Many Requests",
-        "rate limit",
-        "Rate limit",
-        "timed out",
-        "TimeoutError",
-        "Read timed out",
-        "Connection reset",
-        "Connection refused",
-        "Connection aborted",
-        "Remote end closed connection",
-        "urlopen error",
-        "SSL:",
-        "UNEXPECTED_EOF",
-        "EOF occurred",
-        "IncompleteRead",
-        "ChunkedEncodingError",
-        "ProtocolError",
-        "Bad Gateway",
-        "Service Unavailable",
-        "Gateway Timeout",
-    )
-    return any(m in error for m in markers)
-
-
-# --- Convenience ----------------------------------------------------------
-
-
-def build_default_runner(config: RunConfig) -> Runner:
-    from .model_router import build_caller
-
-    caller = build_caller(dry_run=config.dry_run)
-    if config.dry_run:
-        caller = StubModelCaller()
-    return Runner(caller, config)
+                f.write(json.dumps(asdict(r), ensure_ascii=False) + "\n")
+        return results

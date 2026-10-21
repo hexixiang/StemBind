@@ -48,14 +48,10 @@ def vg_by_model(
     for m in models:
         full = accs.get((m, "full-image"))
         text = accs.get((m, "text-only"))
-        caption = accs.get((m, "caption-only"))
-        parse = accs.get((m, "parse-only"))
         row: dict[str, Any] = {
             "model": m,
             "acc_full_image": full if full is not None else TBD,
             "acc_text_only": text if text is not None else TBD,
-            "acc_caption_only": caption if caption is not None else TBD,
-            "acc_parse_only": parse if parse is not None else TBD,
         }
         if full is None or text is None:
             row["vg"] = TBD
@@ -65,7 +61,5 @@ def vg_by_model(
             cn_full = max(0.0, _chance_norm(full, num_options))
             cn_text = max(0.0, _chance_norm(text, num_options))
             row["ibsi"] = (cn_text / cn_full) if cn_full > 0 else TBD
-        if parse is not None and full is not None:
-            row["parse_aid_lift"] = parse - full  # §Exp5 parse-aid lift
         out.append(row)
     return out

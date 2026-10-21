@@ -40,7 +40,6 @@ def accuracy_summary(predictions: Iterable[dict[str, Any]]) -> dict[str, Any]:
     return {
         "overall": _acc_row({"scope": "overall"}, preds),
         "by_model_task": accuracy_by(preds, by=("model", "task_type")),
-        "by_model_source_task": accuracy_by(preds, by=("model", "source", "task_type")),
         "by_model_operation_task": accuracy_by(preds, by=("model", "operation", "task_type")),
         "by_model_condition_task": accuracy_by(preds, by=("model", "condition", "task_type")),
     }

@@ -3,8 +3,8 @@
 Four checks:
   1. rank_change        – top-N model rank change vs Acc
   2. spearman_acc_sc    – Spearman correlation between Acc and StemCoherent
-  3. chance_baseline    – expected StemCoherent if each layer were independent
-                          at the model's marginal acc (≈ Acc^k w/ k = #probes+1)
+  3. chance_baseline    – expected StemCoherent if every probe were independent
+                          at the model's F accuracy (Acc ** (#P probes + 2))
   4. lucky_guess_reduction – Acc - StemCoherent in percentage points
 """
 
@@ -87,6 +87,5 @@ def audit(
         "rank_change_top_n": rank_change_rate,
         "chance_baseline": chance,
         "lucky_guess_reduction_pp": lucky,
-        "fallback_trigger": (rho >= 0.95 and rank_change_rate < 0.10),
         "avg_probes_per_item": avg_probes,
     }
