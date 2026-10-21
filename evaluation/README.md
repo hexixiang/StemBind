@@ -66,5 +66,4 @@ DATASET_DIR/
 The Hugging Face release states the F answer letter inside the `s4` target.
 `data/stembind_labels.jsonl` lists it per image together with the operation
 label, and `prepare_data.py` copies both into `answers.jsonl` and
-`machine_labels_with_ability.jsonl`. Items without an answer key are skipped
-for the F task; their P and R probes are still evaluated.
+`machine_labels_with_ability.jsonl`.

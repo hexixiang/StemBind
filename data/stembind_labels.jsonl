@@ -1216,7 +1216,7 @@
 {"file_name": "images/001215.png", "operation": "VP-View", "answer": "C"}
 {"file_name": "images/001216.png", "operation": "VP-View", "answer": "A"}
 {"file_name": "images/001217.png", "operation": "VP-View", "answer": "C"}
-{"file_name": "images/001218.png", "operation": "VP-View", "answer": null}
+{"file_name": "images/001218.png", "operation": "VP-View", "answer": "D"}
 {"file_name": "images/001219.png", "operation": "VP-View", "answer": "D"}
 {"file_name": "images/001220.png", "operation": "VP-Closure", "answer": "D"}
 {"file_name": "images/001221.png", "operation": "VP-View", "answer": "B"}
@@ -1225,7 +1225,7 @@
 {"file_name": "images/001224.png", "operation": "VP-View", "answer": "C"}
 {"file_name": "images/001225.png", "operation": "VP-View", "answer": "D"}
 {"file_name": "images/001226.png", "operation": "VP-View", "answer": "D"}
-{"file_name": "images/001227.png", "operation": "VP-View", "answer": null}
+{"file_name": "images/001227.png", "operation": "VP-View", "answer": "B"}
 {"file_name": "images/001228.png", "operation": "VP-Fold", "answer": "C"}
 {"file_name": "images/001229.png", "operation": "VP-View", "answer": "A"}
 {"file_name": "images/001230.png", "operation": "VP-Fold", "answer": "D"}
@@ -1338,7 +1338,7 @@
 {"file_name": "images/001337.png", "operation": "RI-Pos", "answer": "B"}
 {"file_name": "images/001338.png", "operation": "VP-View", "answer": "B"}
 {"file_name": "images/001339.png", "operation": "VP-Fold", "answer": "A"}
-{"file_name": "images/001340.png", "operation": "VP-View", "answer": null}
+{"file_name": "images/001340.png", "operation": "VP-View", "answer": "C"}
 {"file_name": "images/001341.png", "operation": "VP-Rot", "answer": "A"}
 {"file_name": "images/001342.png", "operation": "VP-Closure", "answer": "D"}
 {"file_name": "images/001343.png", "operation": "VP-View", "answer": "A"}
@@ -1841,7 +1841,7 @@
 {"file_name": "images/001840.png", "operation": "RI-Qty", "answer": "D"}
 {"file_name": "images/001841.png", "operation": "VP-Closure", "answer": "B"}
 {"file_name": "images/001842.png", "operation": "RI-Attr", "answer": "C"}
-{"file_name": "images/001843.png", "operation": "RI-Attr", "answer": null}
+{"file_name": "images/001843.png", "operation": "RI-Attr", "answer": "D"}
 {"file_name": "images/001844.png", "operation": "VP-Rot", "answer": "A"}
 {"file_name": "images/001845.png", "operation": "VP-Rot", "answer": "B"}
 {"file_name": "images/001846.png", "operation": "VP-Rot", "answer": "D"}
