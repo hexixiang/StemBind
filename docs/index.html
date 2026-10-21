@@ -3,270 +3,309 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description"
-        content="StemBind: a shared-stem diagnostic benchmark that probes perception, rule induction, and rule-to-instance binding in abstract visual reasoning for MLLMs.">
-  <meta name="keywords" content="StemBind, abstract visual reasoning, MLLM, benchmark, rule-to-instance binding">
-  <title>StemBind: When MLLMs Get Lost Between Rules and Instances</title>
+  <title>StemBind: When MLLMs Get Lost Between Rules and Instances in Abstract Visual Reasoning</title>
+  <meta name="description" content="StemBind (NeurIPS 2026): a shared-stem diagnostic benchmark that probes perception, rule induction, and rule-to-instance binding in abstract visual reasoning for MLLMs.">
+  <meta name="keywords" content="StemBind, abstract visual reasoning, MLLM, benchmark, NeurIPS 2026, rule-to-instance binding">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="StemBind: When MLLMs Get Lost Between Rules and Instances in Abstract Visual Reasoning">
+  <meta property="og:description" content="NeurIPS 2026 Evaluations & Datasets Track. 2,298 stems, 19,533 P/R/F tasks, 24 MLLMs.">
+  <meta property="og:url" content="https://hexixiang.github.io/StemBind/">
+  <meta property="og:image" content="https://hexixiang.github.io/StemBind/static/images/teaser.png">
+  <meta name="twitter:card" content="summary_large_image">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Noto+Sans:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
 
   <style>
-    body { font-family: "Noto Sans", system-ui, sans-serif; color: #1f2430; }
-    .hero-title { font-family: "Google Sans", "Noto Sans", sans-serif; font-weight: 700; line-height: 1.18; }
-    .section { padding: 2.2rem 1.5rem; }
-    .authors a { color: #2456a6; }
-    .author-block { margin: 0 0.35rem; white-space: nowrap; }
-    .affil { color: #4a5568; font-size: 0.95rem; }
-    .link-buttons .button { margin: 0.25rem; border-radius: 999px; }
-    .hook { background: #0f1f3d; color: #fff; border-radius: 12px; padding: 1.4rem 1.6rem; }
-    .hook em { color: #ffd479; font-style: normal; font-weight: 600; }
-    .stat { text-align: center; }
-    .stat .num { font-family: "Google Sans", sans-serif; font-size: 2.0rem; font-weight: 700; color: #2456a6; line-height: 1; }
-    .stat .lab { color: #4a5568; font-size: 0.9rem; margin-top: 0.3rem; }
-    .finding-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.1rem 1.3rem; height: 100%; background: #fff; }
-    .finding-card .tag { background: #2456a6; color: #fff; }
-    figure img { border-radius: 8px; }
-    .caption { color: #4a5568; font-size: 0.9rem; margin-top: 0.5rem; }
-    pre.bibtex { background: #0f1f3d; color: #e6edf3; border-radius: 10px; padding: 1.1rem; overflow-x: auto; font-size: 0.85rem; }
-    .note { background: #fff8e1; border-left: 4px solid #f1c40f; padding: 0.7rem 1rem; border-radius: 6px; font-size: 0.9rem; }
-    .section-title { font-family: "Google Sans", sans-serif; font-weight: 700; }
-    .venue { font-family: "Google Sans", sans-serif; font-weight: 700; color: #c0392b; margin-top: 0.8rem; }
+    :root {
+      --ink: #16181d;
+      --muted: #5b6270;
+      --line: #e5e7eb;
+      --soft: #f6f7f9;
+      --accent: #1f4fbf;
+      --p: #2563eb;
+      --r: #c2410c;
+      --f: #7c3aed;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0; background: #fff; color: var(--ink);
+      font: 16px/1.65 "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 0 20px; }
+    section { padding: 56px 0; }
+    section + section { border-top: 1px solid var(--line); }
+    h2 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 20px; }
+    h3 { font-size: 1.1rem; font-weight: 600; margin: 0 0 6px; }
+    p { margin: 0 0 14px; }
+    .muted { color: var(--muted); }
+
+    /* hero */
+    header { padding: 64px 0 32px; text-align: center; }
+    .venue {
+      display: inline-block; font-size: 0.85rem; font-weight: 600; letter-spacing: 0.04em;
+      color: var(--accent); background: #eef3fd; border-radius: 999px; padding: 4px 14px; margin-bottom: 20px;
+    }
+    header h1 { font-size: clamp(1.7rem, 3.6vw, 2.6rem); line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; margin: 0 auto 22px; max-width: 900px; }
+    header h1 .name { color: var(--accent); }
+    .authors { font-size: 1.05rem; margin-bottom: 6px; }
+    .authors span { white-space: nowrap; margin: 0 6px; }
+    .affil { color: var(--muted); font-size: 0.92rem; }
+    .affil span { white-space: nowrap; margin: 0 8px; }
+    .links { margin-top: 26px; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px; padding: 9px 18px; border-radius: 999px;
+      background: var(--ink); color: #fff; font-weight: 500; font-size: 0.95rem;
+    }
+    .btn:hover { background: #2d3139; text-decoration: none; }
+    .teaser { margin-top: 36px; }
+    figure { margin: 0; }
+    figure img { width: 100%; height: auto; display: block; }
+    figcaption { color: var(--muted); font-size: 0.9rem; margin-top: 10px; text-align: center; }
+
+    .tldr { font-size: 1.12rem; line-height: 1.7; }
+    .tldr b.p { color: var(--p); } .tldr b.r { color: var(--r); } .tldr b.f { color: var(--f); }
+
+    /* stats */
+    .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 8px; }
+    .stat { background: var(--soft); border-radius: 12px; padding: 18px 10px; text-align: center; }
+    .stat .num { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.02em; }
+    .stat .lab { color: var(--muted); font-size: 0.85rem; }
+
+    /* findings */
+    .finding { margin-top: 36px; }
+    .finding:first-of-type { margin-top: 0; }
+    .finding .idx { color: var(--accent); font-weight: 600; font-size: 0.85rem; letter-spacing: 0.06em; text-transform: uppercase; }
+    .finding figure { margin-top: 14px; }
+
+    /* leaderboard */
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.93rem; font-variant-numeric: tabular-nums; }
+    th, td { padding: 9px 14px; text-align: right; white-space: nowrap; }
+    th:nth-child(-n+3), td:nth-child(-n+3) { text-align: left; }
+    thead th { background: var(--soft); font-weight: 600; cursor: pointer; user-select: none; border-bottom: 1px solid var(--line); }
+    thead th[data-sort]::after { content: " \2195"; color: #aab; font-size: 0.8em; }
+    tbody tr + tr td { border-top: 1px solid #f0f1f3; }
+    tbody tr:hover { background: #fafbfc; }
+    td.f { font-weight: 700; }
+    .tag { font-size: 0.78rem; padding: 2px 8px; border-radius: 6px; font-weight: 500; }
+    .tag.prop { background: #fdf2e9; color: #9a3412; }
+    .tag.open { background: #ecfdf3; color: #166534; }
+    .note { margin-top: 12px; font-size: 0.9rem; color: var(--muted); }
+
+    /* code */
+    pre {
+      background: #0f172a; color: #e2e8f0; border-radius: 12px; padding: 18px 20px; overflow-x: auto;
+      font: 0.84rem/1.6 "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0;
+    }
+    .bib { position: relative; }
+    .copy {
+      position: absolute; top: 10px; right: 10px; border: 0; border-radius: 8px; padding: 5px 10px; cursor: pointer;
+      background: #1e293b; color: #cbd5e1; font: 500 0.8rem "Inter", sans-serif;
+    }
+    .copy:hover { background: #334155; }
+
+    footer { padding: 28px 0 40px; text-align: center; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--line); }
+
+    @media (max-width: 720px) {
+      section { padding: 40px 0; }
+      header { padding: 40px 0 24px; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .stat:last-child { grid-column: span 2; }
+      th, td { padding: 8px 10px; }
+    }
   </style>
 </head>
-
 <body>
 
-<!-- ===================== HERO / TITLE ===================== -->
-<section class="section" style="padding-top:3rem;">
-  <div class="container is-max-desktop has-text-centered">
-    <h1 class="title is-2 hero-title">
-      <span style="color:#2456a6;">StemBind</span>: When MLLMs Get Lost Between Rules and Instances in Abstract Visual Reasoning
-    </h1>
-
-    <p class="venue is-size-4">NeurIPS 2026</p>
-
-    <p class="authors is-size-5" style="margin-top:1rem;">
-      <span class="author-block">Xixiang He<sup>1</sup>,</span>
-      <span class="author-block">Baiqi Wu<sup>2</sup>,</span>
-      <span class="author-block">Xingming Li<sup>1</sup>,</span>
-      <span class="author-block">Ao Cheng<sup>1</sup>,</span>
-      <span class="author-block">Qiyao Sun<sup>1</sup>,</span>
-      <span class="author-block">Xuanyu Ji<sup>1</sup>,</span>
-      <span class="author-block">Qingyong Hu<sup>3</sup>&#42;</span>
-    </p>
-
-    <p class="affil" style="margin-top:0.6rem;">
-      <sup>1</sup>National University of Defense Technology &nbsp;&nbsp;
-      <sup>2</sup>Zhejiang University &nbsp;&nbsp;
-      <sup>3</sup>Intelligent Game and Decision Lab
-    </p>
-    <p class="affil"><sup>&#42;</sup>Corresponding author</p>
-
-    <div class="link-buttons" style="margin-top:1.4rem;">
-      <a class="button is-dark" href="https://arxiv.org/abs/2606.00148" target="_blank" rel="noopener">
-        <span class="icon"><i class="ai ai-arxiv"></i></span><span>arXiv</span>
-      </a>
-      <a class="button is-dark" href="https://github.com/hexixiang/StemBind" target="_blank" rel="noopener">
-        <span class="icon"><i class="fab fa-github"></i></span><span>Code</span>
-      </a>
-      <a class="button is-dark" href="https://huggingface.co/datasets/user48271/Stembind" target="_blank" rel="noopener">
-        <span class="icon">&#129303;</span><span>Dataset</span>
-      </a>
-      <a class="button is-dark" href="#leaderboard">
-        <span class="icon"><i class="fas fa-trophy"></i></span><span>Leaderboard</span>
-      </a>
+<header>
+  <div class="wrap">
+    <div class="venue">NeurIPS 2026 · Evaluations &amp; Datasets Track</div>
+    <h1><span class="name">StemBind</span>: When MLLMs Get Lost Between Rules and Instances in Abstract Visual Reasoning</h1>
+    <div class="authors">
+      <span>Xixiang He<sup>1</sup></span>
+      <span>Baiqi Wu<sup>2</sup></span>
+      <span>Xingming Li<sup>1</sup></span>
+      <span>Ao Cheng<sup>1</sup></span>
+      <span>Qiyao Sun<sup>1</sup></span>
+      <span>Xuanyu Ji<sup>1</sup></span>
+      <span>Qingyong Hu<sup>3*</sup></span>
     </div>
-  </div>
-</section>
-
-<!-- ===================== TEASER ===================== -->
-<section class="section" style="padding-top:0.5rem;">
-  <div class="container is-max-desktop has-text-centered">
-    <figure>
-      <img src="static/images/teaser.png" alt="StemBind overview: nine RI/VP operations, shared-stem P/R/F probes, and S1-S4 process stages.">
-      <p class="caption">
-        StemBind probes the <strong>same visual stem</strong> three ways &mdash; <strong>P</strong>erception (what is in the image),
-        <strong>R</strong>ule (what pattern governs it), and <strong>F</strong>ull (which option completes it) &mdash;
-        and annotates each full item with four reasoning stages: <strong>S1 Encode, S2 Infer, S3 Map, S4 Apply</strong>.
-      </p>
+    <div class="affil">
+      <span><sup>1</sup>National University of Defense Technology</span>
+      <span><sup>2</sup>Zhejiang University</span>
+      <span><sup>3</sup>Intelligent Game and Decision Lab</span>
+      <br><span><sup>*</sup>Corresponding author</span>
+    </div>
+    <div class="links">
+      <a class="btn" href="https://arxiv.org/abs/2606.00148"><i class="ai ai-arxiv"></i> arXiv</a>
+      <a class="btn" href="https://arxiv.org/pdf/2606.00148"><i class="fa-regular fa-file-pdf"></i> PDF</a>
+      <a class="btn" href="https://github.com/hexixiang/StemBind"><i class="fa-brands fa-github"></i> Code</a>
+      <a class="btn" href="https://huggingface.co/datasets/user48271/Stembind"><span>🤗</span> Dataset</a>
+      <a class="btn" href="#leaderboard"><i class="fa-solid fa-trophy"></i> Leaderboard</a>
+      <a class="btn" href="#citation"><i class="fa-solid fa-quote-left"></i> BibTeX</a>
+    </div>
+    <figure class="teaser">
+      <img src="static/images/teaser.png" alt="StemBind overview: nine operations, shared-stem P/R/F probes, and S1-S4 process annotation">
+      <figcaption>Nine visual operations; every stem is probed at three levels (P / R / F), and every F item carries S1–S4 process targets.</figcaption>
     </figure>
   </div>
-</section>
+</header>
 
-<!-- ===================== HOOK ===================== -->
-<section class="section" style="padding-top:0.5rem;">
-  <div class="container is-max-desktop">
-    <div class="hook has-text-centered is-size-5">
-      MLLMs often <em>know the rule but pick the wrong answer</em>: a model can describe what it sees and name the
-      underlying pattern, yet still fail to choose the matching candidate. StemBind is built to catch exactly this failure
-      on the same visual evidence.
+<section>
+  <div class="wrap">
+    <p class="tldr">MLLMs often <em>know the rule but pick the wrong answer</em>. StemBind probes the <strong>same visual stem</strong> three ways:
+      <b class="p">Perception</b> (what is in the image), <b class="r">Rule</b> (what pattern governs it) and
+      <b class="f">Full item</b> (which option completes it). A wrong final answer can then be traced to the sub-step that failed, on the same evidence.</p>
+    <div class="stats">
+      <div class="stat"><div class="num">2,298</div><div class="lab">curated stems</div></div>
+      <div class="stat"><div class="num">19,533</div><div class="lab">P / R / F tasks</div></div>
+      <div class="stat"><div class="num">9</div><div class="lab">visual operations</div></div>
+      <div class="stat"><div class="num">S1–S4</div><div class="lab">process stages</div></div>
+      <div class="stat"><div class="num">24</div><div class="lab">MLLMs evaluated</div></div>
     </div>
   </div>
 </section>
 
-<!-- ===================== ABSTRACT ===================== -->
-<section class="section">
-  <div class="container is-max-desktop">
-    <h2 class="title is-3 section-title has-text-centered">Abstract</h2>
-    <div class="content is-size-5" style="text-align:justify;">
-      <p>
-        Existing abstract visual reasoning (AVR) benchmarks collapse perception, rule induction, and answer selection into
-        a single right-or-wrong signal, so they cannot tell <em>why</em> a model failed. We introduce <strong>StemBind</strong>,
-        a shared-stem diagnostic benchmark that probes the same visual stem with three aligned questions &mdash;
-        Perception, Rule, and Full &mdash; so a final-answer error can be attributed to a specific sub-step on the same evidence.
-        StemBind contains <strong>2,298</strong> curated knowledge-light stems across nine auditable visual operations,
-        totaling <strong>19,533</strong> P/R/F tasks, with each full item annotated by Sternberg's four reasoning stages
-        (S1 Encode, S2 Infer, S3 Map, S4 Apply).
-      </p>
-      <p>
-        Evaluating <strong>24 frontier MLLM configurations</strong> yields four findings: (i) rule accuracy exceeds full-item
-        accuracy on 22 of 24 models, so most failures happen <em>after</em> the rule is identified; (ii) even when perception
-        and rule are both correct on the same stem, models still answer Full incorrectly 51.2% of the time; (iii) process
-        diagnostics and Stage-wise Stimulus Augmentation localize the dominant failure to <strong>S3 rule-to-instance mapping</strong>;
-        and (iv) neither scaling up model size nor enabling explicit thinking reliably closes the gap. StemBind reframes AVR
-        evaluation from final-answer ranking to locating <em>where</em> abstract visual reasoning breaks down.
-      </p>
+<section>
+  <div class="wrap">
+    <h2>Abstract</h2>
+    <p>Existing abstract visual reasoning (AVR) benchmarks collapse perception, rule induction, and answer selection into a single right-or-wrong signal, so they cannot tell <em>why</em> a model failed. We introduce StemBind, a shared-stem diagnostic benchmark that probes the same visual stem with three aligned questions (Perception, Rule, and Full), so a final-answer error can be attributed to a specific sub-step on the same evidence. StemBind contains 2,298 curated knowledge-light stems across nine auditable visual operations, totaling 19,533 P/R/F tasks, with each full item annotated by Sternberg's four reasoning stages (S1 Encode, S2 Infer, S3 Map, S4 Apply).</p>
+    <p>Evaluating 24 frontier MLLM configurations yields four findings: (i) rule accuracy exceeds full-item accuracy on 22 of 24 models, so most failures happen after the rule is identified; (ii) even when perception and rule are both correct on the same stem, models still answer Full incorrectly 51.2% of the time; (iii) process diagnostics and Stage-wise Stimulus Augmentation localize the dominant failure to S3 rule-to-instance mapping; and (iv) neither scaling up model size nor enabling explicit thinking reliably closes the gap. StemBind reframes AVR evaluation from final-answer ranking to locating where abstract visual reasoning breaks down.</p>
+  </div>
+</section>
+
+<section id="leaderboard">
+  <div class="wrap">
+    <h2>Leaderboard</h2>
+    <p class="muted">Overall accuracy (%) on the full benchmark. Click a column to sort. R − F is the rule-to-full drop.</p>
+    <div class="table-wrap">
+      <table id="lb">
+        <thead>
+          <tr><th data-sort="num">#</th><th data-sort="text">Model</th><th data-sort="text">Type</th><th data-sort="num">P</th><th data-sort="num">R</th><th data-sort="num">F</th><th data-sort="num">R − F</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td>Qwen3.5-Plus</td><td><span class="tag prop">Proprietary</span></td><td>71.9</td><td>44.7</td><td class="f">42.2</td><td>+2.5</td></tr>
+          <tr><td>2</td><td>Qwen3.5-27B</td><td><span class="tag open">Open</span></td><td>72.9</td><td>65.4</td><td class="f">41.3</td><td>+24.1</td></tr>
+          <tr><td>3</td><td>Qwen3.5-35B-A3B</td><td><span class="tag open">Open</span></td><td>72.6</td><td>59.8</td><td class="f">39.3</td><td>+20.5</td></tr>
+          <tr><td>4</td><td>Qwen3.5-9B</td><td><span class="tag open">Open</span></td><td>68.9</td><td>60.1</td><td class="f">37.4</td><td>+22.7</td></tr>
+          <tr><td>5</td><td>Kimi-K2.5</td><td><span class="tag open">Open</span></td><td>65.9</td><td>58.4</td><td class="f">36.8</td><td>+21.6</td></tr>
+          <tr><td>6</td><td>Qwen3.5-2B</td><td><span class="tag open">Open</span></td><td>61.4</td><td>60.5</td><td class="f">35.9</td><td>+24.6</td></tr>
+          <tr><td>7</td><td>Gemini-3.1-Pro</td><td><span class="tag prop">Proprietary</span></td><td>58.7</td><td>24.3</td><td class="f">35.9</td><td>-11.6</td></tr>
+          <tr><td>8</td><td>GLM-4.5V</td><td><span class="tag open">Open</span></td><td>63.4</td><td>54.1</td><td class="f">34.6</td><td>+19.5</td></tr>
+          <tr><td>9</td><td>Qwen3.5-4B</td><td><span class="tag open">Open</span></td><td>66.5</td><td>56.7</td><td class="f">33.8</td><td>+22.9</td></tr>
+          <tr><td>10</td><td>Qwen3.5-122B-A10B</td><td><span class="tag open">Open</span></td><td>55.7</td><td>29.6</td><td class="f">33.8</td><td>-4.2</td></tr>
+          <tr><td>11</td><td>Gemma-4-31B-it</td><td><span class="tag open">Open</span></td><td>67.0</td><td>67.5</td><td class="f">33.1</td><td>+34.4</td></tr>
+          <tr><td>12</td><td>Gemma-4-26B-A4B-it</td><td><span class="tag open">Open</span></td><td>71.7</td><td>65.4</td><td class="f">33.0</td><td>+32.4</td></tr>
+          <tr><td>13</td><td>GPT-5.4</td><td><span class="tag prop">Proprietary</span></td><td>61.2</td><td>60.1</td><td class="f">31.8</td><td>+28.3</td></tr>
+          <tr><td>14</td><td>Claude-Opus-4.7</td><td><span class="tag prop">Proprietary</span></td><td>60.8</td><td>56.2</td><td class="f">30.7</td><td>+25.5</td></tr>
+          <tr><td>15</td><td>Gemma-4-E4B-it</td><td><span class="tag open">Open</span></td><td>66.0</td><td>55.0</td><td class="f">30.6</td><td>+24.4</td></tr>
+          <tr><td>16</td><td>Qwen3.5-0.8B</td><td><span class="tag open">Open</span></td><td>41.5</td><td>48.7</td><td class="f">30.2</td><td>+18.5</td></tr>
+          <tr><td>17</td><td>InternVL3.5-30B-A3B</td><td><span class="tag open">Open</span></td><td>45.1</td><td>32.9</td><td class="f">28.9</td><td>+4.0</td></tr>
+          <tr><td>18</td><td>Gemma-4-E2B-it</td><td><span class="tag open">Open</span></td><td>58.9</td><td>43.0</td><td class="f">28.6</td><td>+14.4</td></tr>
+          <tr><td>19</td><td>Grok-4.2-beta</td><td><span class="tag prop">Proprietary</span></td><td>49.3</td><td>31.3</td><td class="f">28.1</td><td>+3.2</td></tr>
+          <tr><td>20</td><td>InternVL3.5-14B</td><td><span class="tag open">Open</span></td><td>43.2</td><td>30.7</td><td class="f">28.1</td><td>+2.6</td></tr>
+          <tr><td>21</td><td>InternVL3.5-8B</td><td><span class="tag open">Open</span></td><td>39.5</td><td>33.6</td><td class="f">26.7</td><td>+6.9</td></tr>
+          <tr><td>22</td><td>InternVL3.5-4B</td><td><span class="tag open">Open</span></td><td>36.8</td><td>27.9</td><td class="f">24.8</td><td>+3.1</td></tr>
+          <tr><td>23</td><td>InternVL3.5-2B</td><td><span class="tag open">Open</span></td><td>34.9</td><td>29.4</td><td class="f">23.1</td><td>+6.3</td></tr>
+          <tr><td>24</td><td>InternVL3.5-1B</td><td><span class="tag open">Open</span></td><td>30.6</td><td>24.8</td><td class="f">20.7</td><td>+4.1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Per-operation scores and thinking-mode deltas are in Table 2 of the paper. To evaluate a new model, see the <a href="https://github.com/hexixiang/StemBind#getting-started">code repository</a>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Key Findings</h2>
+
+    <div class="finding">
+      <div class="idx">Finding 1</div>
+      <h3>The R–F chasm and a persistent binding gap</h3>
+      <p>Rule accuracy exceeds full-item accuracy on <strong>22 of 24</strong> models, often by 20–34 points. Even on the strict subset where perception and rule are both correct on the same stem, models still miss the full item <strong>51.2%</strong> of the time. The failure is behavioral rule-to-instance binding, not a missing rule.</p>
+      <figure><img src="static/images/rf_chasm.png" alt="R-F chasm across 24 models"></figure>
+      <figure><img src="static/images/binding_gap.png" alt="Conditional binding gap"></figure>
+    </div>
+
+    <div class="finding">
+      <div class="idx">Finding 2</div>
+      <h3>The bottleneck is S3 Map</h3>
+      <p>Stage-wise judging and Stage-wise Stimulus Augmentation (SSA) both point to <strong>S3 rule-to-instance mapping</strong>: S3 is the weakest stage on every full-split row, and the largest SSA gain appears when S3 alignment is injected. This is a behavioral localization, not a mechanistic claim.</p>
+      <figure><img src="static/images/stage_ssa.png" alt="Qwen3.5 S1-S4 and SSA localization" style="max-width:820px;margin:0 auto;"></figure>
+    </div>
+
+    <div class="finding">
+      <div class="idx">Finding 3</div>
+      <h3>Scaling does not close the gap</h3>
+      <p>Within-family scaling shifts perception and rule far more than full-item accuracy. Qwen3.5 dense models peak before the MoE variants and the largest MoE variant collapses on rule, while Gemma&nbsp;4 and InternVL3.5 improve on Full yet keep the R–F chasm.</p>
+      <figure><img src="static/images/family_scaling.png" alt="Family scaling across Qwen3.5, Gemma 4 and InternVL3.5"></figure>
+    </div>
+
+    <div class="finding">
+      <div class="idx">Finding 4</div>
+      <h3>Thinking does not repair the gap</h3>
+      <p>Across paired direct/thinking rows, explicit thinking lifts perception on nine of ten rows but <strong>lowers both rule and full-item accuracy on every row</strong>. Longer traces help local descriptions but break the slot-level correspondence the full item requires.</p>
+      <figure><img src="static/images/thinking_paired.png" alt="Paired direct vs thinking modes"></figure>
     </div>
   </div>
 </section>
 
-<!-- ===================== AT A GLANCE ===================== -->
-<section class="section" style="background:#f5f7fb;">
-  <div class="container is-max-desktop">
-    <h2 class="title is-3 section-title has-text-centered">Benchmark at a Glance</h2>
-    <div class="columns is-multiline" style="margin-top:0.5rem;">
-      <div class="column is-one-fifth stat"><div class="num">2,298</div><div class="lab">curated stems</div></div>
-      <div class="column is-one-fifth stat"><div class="num">19,533</div><div class="lab">P/R/F tasks</div></div>
-      <div class="column is-one-fifth stat"><div class="num">9</div><div class="lab">visual operations</div></div>
-      <div class="column is-one-fifth stat"><div class="num">S1&ndash;S4</div><div class="lab">process stages</div></div>
-      <div class="column is-one-fifth stat"><div class="num">24</div><div class="lab">MLLM configs</div></div>
-    </div>
-    <p class="has-text-centered affil" style="margin-top:0.5rem;">
-      Task split: 14,937 Perception &middot; 2,298 Rule &middot; 2,298 Full. Operations span the Rule-Induction family
-      (RI-Pos, RI-Sty, RI-Attr, RI-Qty, RI-Rel) and the Visual-Processing family (VP-Fold, VP-View, VP-Rot, VP-Closure).
-    </p>
-  </div>
-</section>
-
-<!-- ===================== FINDINGS ===================== -->
-<section class="section">
-  <div class="container is-max-desktop">
-    <h2 class="title is-3 section-title has-text-centered">Key Findings</h2>
-
-    <div class="columns is-vcentered" style="margin-top:0.5rem;">
-      <div class="column is-half">
-        <div class="finding-card">
-          <span class="tag is-medium">Finding 1</span>
-          <h3 class="title is-5" style="margin-top:0.6rem;">The R&ndash;F chasm and a persistent binding gap</h3>
-          <p>Rule accuracy exceeds full-item accuracy on <strong>22 of 24</strong> models, often by 20&ndash;34 points. Even on
-          the strict subset where perception and rule are both correct on the same stem, models still miss the full item
-          <strong>51.2%</strong> of the time. The failure is behavioral rule-to-instance binding, not a missing rule.</p>
-        </div>
-      </div>
-      <div class="column is-half has-text-centered">
-        <figure><img src="static/images/rf_chasm.png" alt="R-F chasm across 24 models"></figure>
-      </div>
-    </div>
-
-    <div class="columns is-vcentered">
-      <div class="column is-half has-text-centered">
-        <figure><img src="static/images/stage_ssa.png" alt="Qwen3.5 S1-S4 and SSA localization"></figure>
-      </div>
-      <div class="column is-half">
-        <div class="finding-card">
-          <span class="tag is-medium">Finding 2</span>
-          <h3 class="title is-5" style="margin-top:0.6rem;">The bottleneck is S3 Map</h3>
-          <p>Stage-wise judging and Stage-wise Stimulus Augmentation (SSA) both point to <strong>S3 rule-to-instance mapping</strong>:
-          S3 is the weakest stage on every full-split row, and the largest SSA gain appears precisely when S3 alignment is
-          injected. This is a behavioral localization, not a mechanistic claim.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="columns is-vcentered">
-      <div class="column is-half">
-        <div class="finding-card">
-          <span class="tag is-medium">Finding 3</span>
-          <h3 class="title is-5" style="margin-top:0.6rem;">Scaling does not close the gap</h3>
-          <p>Within-family scaling shifts perception and rule far more than full-item accuracy. Qwen3.5 dense peaks pre-MoE
-          and the largest MoE variant collapses on rule, while Gemma&nbsp;4 and InternVL3.5 improve on Full yet keep the
-          R&ndash;F chasm.</p>
-        </div>
-      </div>
-      <div class="column is-half has-text-centered">
-        <figure><img src="static/images/family_scaling.png" alt="Family scaling across Qwen3.5, Gemma 4, InternVL3.5"></figure>
-      </div>
-    </div>
-
-    <div class="columns is-vcentered">
-      <div class="column is-half has-text-centered">
-        <figure><img src="static/images/thinking_paired.png" alt="Paired direct vs thinking modes"></figure>
-      </div>
-      <div class="column is-half">
-        <div class="finding-card">
-          <span class="tag is-medium">Finding 4</span>
-          <h3 class="title is-5" style="margin-top:0.6rem;">Thinking does not repair the gap</h3>
-          <p>Across paired direct/thinking rows, explicit thinking lifts perception on nine of ten rows but <strong>lowers
-          both rule and full-item accuracy on every row</strong>. Longer traces aid local descriptions but break the
-          slot-level correspondence the full item requires.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== LEADERBOARD ===================== -->
-<section class="section" id="leaderboard" style="background:#f5f7fb;">
-  <div class="container is-max-desktop has-text-centered">
-    <h2 class="title is-3 section-title">Leaderboard</h2>
-    <figure style="margin-top:0.5rem;">
-      <img src="static/images/model_performance.png" alt="Aggregate P/R/F performance across evaluated models">
-      <p class="caption">Aggregate P/R/F performance. Many models preserve stronger P or R accuracy while dropping on F.</p>
-    </figure>
-    <p class="affil" style="margin-top:0.8rem;">
-      Full per-model results and the evaluation harness are in the
-      <a href="https://github.com/hexixiang/StemBind" target="_blank" rel="noopener">code repository</a>.
-    </p>
-  </div>
-</section>
-
-<!-- ===================== CITATION ===================== -->
-<section class="section">
-  <div class="container is-max-desktop">
-    <h2 class="title is-3 section-title">Citation</h2>
-    <pre class="bibtex">@inproceedings{he2026stembind,
+<section id="citation">
+  <div class="wrap">
+    <h2>Citation</h2>
+    <div class="bib">
+      <button class="copy" type="button">Copy</button>
+<pre id="bibtex">@inproceedings{he2026stembind,
   title     = {StemBind: When MLLMs Get Lost Between Rules and Instances in Abstract Visual Reasoning},
   author    = {He, Xixiang and Wu, Baiqi and Li, Xingming and Cheng, Ao and Sun, Qiyao and Ji, Xuanyu and Hu, Qingyong},
   booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
   year      = {2026}
 }</pre>
-  </div>
-</section>
-
-<!-- ===================== VISITORS ===================== -->
-<section class="section" style="padding-top:0.5rem; padding-bottom:1rem;">
-  <div class="container has-text-centered">
-    <h2 class="title is-5 section-title">Visitors Around the World</h2>
-    <div style="width:75%; max-width:640px; margin:0.5rem auto 0;">
-      <script type="text/javascript" id="mapmyvisitors" src="//mapmyvisitors.com/map.js?d=biN142LbnamN0vWcjv7idXbdyVKvRbA9MvMoBP6UQP4&cl=ffffff&w=a"></script>
     </div>
   </div>
 </section>
 
-<!-- ===================== FOOTER ===================== -->
-<footer class="footer" style="padding:2rem 1.5rem;">
-  <div class="container has-text-centered affil">
-    <p>
-      This page uses the
-      <a href="https://github.com/eliahuhorwitz/Academic-project-page-template" target="_blank" rel="noopener">Academic Project Page Template</a>.
-      Content is released under the repository license.
-    </p>
+<footer>
+  <div class="wrap">
+    Code under Apache-2.0 · Data under CC BY 4.0 · Page adapted from the <a href="https://github.com/eliahuhorwitz/Academic-project-page-template">Academic Project Page Template</a>.
   </div>
 </footer>
 
+<script>
+  (function () {
+    var btn = document.querySelector(".copy");
+    btn.addEventListener("click", function () {
+      var text = document.getElementById("bibtex").innerText;
+      var done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = "Copy"; }, 1500); };
+      if (navigator.clipboard) { navigator.clipboard.writeText(text).then(done, function () {}); }
+    });
+
+    var table = document.getElementById("lb");
+    var heads = table.querySelectorAll("th");
+    heads.forEach(function (th, col) {
+      var asc = false;
+      th.addEventListener("click", function () {
+        asc = !asc;
+        var body = table.tBodies[0];
+        var rows = Array.prototype.slice.call(body.rows);
+        var numeric = th.dataset.sort === "num";
+        rows.sort(function (a, b) {
+          var x = a.cells[col].innerText, y = b.cells[col].innerText;
+          var d = numeric ? parseFloat(x) - parseFloat(y) : x.localeCompare(y);
+          return asc ? d : -d;
+        });
+        rows.forEach(function (r) { body.appendChild(r); });
+      });
+    });
+  })();
+</script>
 </body>
 </html>
